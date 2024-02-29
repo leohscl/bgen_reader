@@ -1,5 +1,6 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::BgenSteam;
+use bgen_reader::bgen::HeaderFlags;
 use std::io::Cursor;
 
 #[test]
@@ -12,6 +13,17 @@ fn read_offset() {
 fn read_header_size() {
     let bgen_stream = create_bgen_and_read();
     assert_eq!(20, bgen_stream.header_size);
+}
+
+#[test]
+fn read_header_flags() {
+    let header_flag = HeaderFlags {
+        compressed_snp_blocks: true,
+        layout_id: 2,
+        sample_id_present: false,
+    };
+    let bgen_stream = create_bgen_and_read();
+    assert_eq!(header_flag, bgen_stream.header_flags);
 }
 
 fn create_bgen_and_read() -> BgenSteam<Cursor<Vec<u8>>> {

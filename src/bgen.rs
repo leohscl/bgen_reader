@@ -13,12 +13,31 @@ pub struct BgenSteam<T> {
     pub header_size: u32,
     pub variant_num: u32,
     pub sample_num: u32,
+    pub header_flags: HeaderFlags,
+    pub variants_data: VariantData,
+}
+
+#[derive(Default, Debug)]
+pub struct VariantData {
+    number_individuals: u32,
+    variants_id: String,
+    rsid: String,
+    chr: String,
+    pos: u32,
+    number_alleles: u16,
+    alleles: Vec<String>,
 }
 
 macro_rules! read_into_buffer {
     ($buffer:ident, $self:ident, $bytes:literal) => {
         let mut $buffer = [0; $bytes];
         $self.read(&mut $buffer)?;
+    };
+}
+macro_rules! read_into_vector {
+    ($buffer:ident, $self:ident, $bytes:ident) => {
+        let mut $buffer = vec![0; $bytes];
+        $self.read(&mut $buffer.as_mut_slice())?;
     };
 }
 
@@ -30,6 +49,8 @@ impl<T: Read> BgenSteam<T> {
             header_size: 0,
             variant_num: 0,
             sample_num: 0,
+            header_flags: HeaderFlags::default(),
+            variants_data: VariantData::default(),
         }
     }
     pub fn read_offset_and_header(&mut self) -> Result<()> {
@@ -52,9 +73,60 @@ impl<T: Read> BgenSteam<T> {
                 "Magic number in header is not correct. The data is most likely corrupted",
             ));
         }
-
+        self.skip_bytes(self.header_size as usize - 20)?;
+        self.header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
+        // For now, we ignore sample info, if it exists
+        let bytes_until_data_start = self.start_data_offset - (self.header_size + 4);
+        self.skip_bytes(bytes_until_data_start as usize)?;
         Ok(())
     }
+
+    pub fn read_variant_data(&mut self) -> Result<VariantData> {
+        let number_individuals = self.read_u32()?;
+        let variants_id = self.read_u16_sized_string()?;
+        let rsid = self.read_u16_sized_string()?;
+        let chr = self.read_u16_sized_string()?;
+        let pos = self.read_u32()?;
+        let num_alleles = self.read_u16()?;
+        let alleles: Result<Vec<String>> = (0..num_alleles)
+            .map(|_| self.read_u32_sized_string())
+            .collect();
+        let variant_data = VariantData {
+            number_individuals,
+            variants_id,
+            rsid,
+            chr,
+            pos,
+            number_alleles: num_alleles,
+            alleles: alleles?,
+        };
+        Ok(variant_data)
+    }
+
+    fn read_u32_sized_string(&mut self) -> Result<String> {
+        let size = self.read_u32()? as usize;
+        self.read_string(size)
+    }
+
+    fn read_u16_sized_string(&mut self) -> Result<String> {
+        let size = self.read_u16()? as usize;
+        self.read_string(size)
+    }
+
+    fn read_string(&mut self, size: usize) -> Result<String> {
+        read_into_vector!(str_bytes, self, size);
+        String::from_utf8(str_bytes).map_err(|e| e.into())
+    }
+
+    fn read_u16(&mut self) -> Result<u16> {
+        read_into_buffer!(buffer, self, 2);
+        Ok(buffer
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (1 << i) * (*b as u16))
+            .sum())
+    }
+
     fn read_u32(&mut self) -> Result<u32> {
         read_into_buffer!(buffer, self, 4);
         Ok(buffer
@@ -62,6 +134,15 @@ impl<T: Read> BgenSteam<T> {
             .enumerate()
             .map(|(i, b)| (1 << i) * (*b as u32))
             .sum())
+    }
+
+    fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
+        if num_bytes > 0 {
+            let mut vec = vec![0; num_bytes];
+            self.read(vec.as_mut_slice())?;
+            dbg!(vec);
+        }
+        Ok(())
     }
 }
 
@@ -93,5 +174,25 @@ impl<T: Read> BufRead for BgenSteam<T> {
 
     fn consume(&mut self, amt: usize) {
         self.stream.consume(amt)
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct HeaderFlags {
+    pub compressed_snp_blocks: bool,
+    pub layout_id: u8,
+    pub sample_id_present: bool,
+}
+
+impl HeaderFlags {
+    fn from_u32(value: u32) -> Result<HeaderFlags> {
+        let compressed_snp_blocks = (value & 1) == 1;
+        let sample_id_present = ((value >> 31) & 1) == 1;
+        let layout_id = ((value >> 2) & 3) as u8;
+        Ok(HeaderFlags {
+            compressed_snp_blocks,
+            layout_id,
+            sample_id_present,
+        })
     }
 }
