@@ -6,7 +6,7 @@ use std::io::Cursor;
 #[test]
 fn read_offset() {
     let bgen_stream = create_bgen_and_read();
-    assert_eq!(204, bgen_stream.start_data_offset);
+    assert_eq!(1728, bgen_stream.start_data_offset);
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn read_header_flags() {
     let header_flag = HeaderFlags {
         compressed_snp_blocks: true,
         layout_id: 2,
-        sample_id_present: false,
+        sample_id_present: true,
     };
     let bgen_stream = create_bgen_and_read();
     assert_eq!(header_flag, bgen_stream.header_flags);
