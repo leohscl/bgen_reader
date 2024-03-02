@@ -31,13 +31,13 @@ pub struct VariantData {
 macro_rules! read_into_buffer {
     ($buffer:ident, $self:ident, $bytes:literal) => {
         let mut $buffer = [0; $bytes];
-        $self.read(&mut $buffer)?;
+        $self.read_exact(&mut $buffer)?;
     };
 }
 macro_rules! read_into_vector {
     ($buffer:ident, $self:ident, $bytes:ident) => {
         let mut $buffer = vec![0; $bytes];
-        $self.read(&mut $buffer.as_mut_slice())?;
+        $self.read_exact(&mut $buffer.as_mut_slice())?;
     };
 }
 
@@ -77,13 +77,14 @@ impl<T: Read> BgenSteam<T> {
         }
         self.skip_bytes(self.header_size as usize - 20)?;
         self.header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
+        println!("Layout id: {}", self.header_flags.layout_id);
         // For now, we ignore sample info, if it exists
         let bytes_until_data_start = self.start_data_offset - (self.header_size);
         self.skip_bytes(bytes_until_data_start as usize)?;
         Ok(())
     }
     pub fn read_all_variant_data(&mut self) -> Result<()> {
-        self.variants_data = (0..1)
+        self.variants_data = (0..self.variant_num)
             .map(|_| self.read_variant_data())
             .collect::<Result<Vec<_>>>()?;
         Ok(())
@@ -100,13 +101,8 @@ impl<T: Read> BgenSteam<T> {
         let rsid = self.read_u16_sized_string()?;
         let chr = self.read_u16_sized_string()?;
         let pos = self.read_u32()?;
-        dbg!(pos);
         let num_alleles = if layout_id == 1 { 2 } else { self.read_u16()? };
-        dbg!(num_alleles);
         let alleles: Result<Vec<String>> = (0..num_alleles)
-            .inspect(|i| {
-                dbg!(i);
-            })
             .map(|_| self.read_u32_sized_string())
             .collect();
         let variant_data = VariantData {
@@ -118,6 +114,8 @@ impl<T: Read> BgenSteam<T> {
             number_alleles: num_alleles,
             alleles: alleles?,
         };
+        let bytes_until_next_data_block = self.read_u32()?;
+        self.skip_bytes(bytes_until_next_data_block as usize)?;
         Ok(variant_data)
     }
 
@@ -128,14 +126,12 @@ impl<T: Read> BgenSteam<T> {
 
     fn read_u16_sized_string(&mut self) -> Result<String> {
         let size = self.read_u16()? as usize;
-        dbg!(size);
         self.read_string(size)
     }
 
     fn read_string(&mut self, size: usize) -> Result<String> {
         read_into_vector!(str_bytes, self, size);
-        let s = String::from_utf8(str_bytes).map_err(|e| e.into());
-        dbg!(s)
+        String::from_utf8(str_bytes).map_err(|e| e.into())
     }
 
     fn read_u16(&mut self) -> Result<u16> {
@@ -157,11 +153,11 @@ impl<T: Read> BgenSteam<T> {
     }
 
     fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
+        // println!("Num bytes to skip: {}", num_bytes);
         if num_bytes > 0 {
             let mut vec = vec![0; num_bytes];
-            self.read(vec.as_mut_slice())?;
-            let string_test = String::from_utf8_lossy(vec.as_slice());
-            dbg!(string_test);
+            self.read_exact(vec.as_mut_slice())?;
+            // String::from_utf8_lossy(vec.as_slice());
         }
         Ok(())
     }

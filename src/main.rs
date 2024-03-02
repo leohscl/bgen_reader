@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     let mut bgen_stream = BgenSteam::from_path(&cli.filename)?;
     bgen_stream.read_offset_and_header()?;
     bgen_stream.read_all_variant_data()?;
-    dbg!(bgen_stream.header_flags);
-    dbg!(bgen_stream.variants_data);
+    // dbg!(bgen_stream.header_flags);
+    // dbg!(bgen_stream.variants_data);
     Ok(())
 }

@@ -1,3 +1,4 @@
 bed-reader
 target
 Cargo.lock
+*.bgi
