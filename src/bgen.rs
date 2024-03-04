@@ -15,6 +15,7 @@ pub struct BgenSteam<T> {
     pub sample_num: u32,
     pub header_flags: HeaderFlags,
     pub variants_data: Vec<VariantData>,
+    pub byte_count: usize,
 }
 
 #[derive(Default, Debug)]
@@ -26,17 +27,21 @@ pub struct VariantData {
     pub pos: u32,
     pub number_alleles: u16,
     pub alleles: Vec<String>,
+    pub file_start_position: usize,
+    pub size_in_bytes: usize,
 }
 
 macro_rules! read_into_buffer {
     ($buffer:ident, $self:ident, $bytes:literal) => {
         let mut $buffer = [0; $bytes];
+        $self.add_counter($bytes);
         $self.read_exact(&mut $buffer)?;
     };
 }
 macro_rules! read_into_vector {
     ($buffer:ident, $self:ident, $bytes:ident) => {
         let mut $buffer = vec![0; $bytes];
+        $self.add_counter($bytes);
         $self.read_exact(&mut $buffer.as_mut_slice())?;
     };
 }
@@ -51,7 +56,11 @@ impl<T: Read> BgenSteam<T> {
             sample_num: 0,
             header_flags: HeaderFlags::default(),
             variants_data: vec![],
+            byte_count: 0,
         }
+    }
+    fn add_counter(&mut self, bytes: usize) {
+        self.byte_count += bytes;
     }
     pub fn read_offset_and_header(&mut self) -> Result<()> {
         self.start_data_offset = self.read_u32()?;
@@ -91,6 +100,7 @@ impl<T: Read> BgenSteam<T> {
     }
 
     fn read_variant_data(&mut self) -> Result<VariantData> {
+        let file_start_position = self.byte_count;
         let layout_id = self.header_flags.layout_id;
         let number_individuals = if layout_id == 1 {
             Some(self.read_u32()?)
@@ -105,6 +115,10 @@ impl<T: Read> BgenSteam<T> {
         let alleles: Result<Vec<String>> = (0..num_alleles)
             .map(|_| self.read_u32_sized_string())
             .collect();
+        let bytes_until_next_data_block = self.read_u32()?;
+        self.skip_bytes(bytes_until_next_data_block as usize)?;
+        let file_end_position = self.byte_count;
+        let size_in_bytes = file_end_position - file_start_position;
         let variant_data = VariantData {
             number_individuals,
             variants_id,
@@ -113,9 +127,9 @@ impl<T: Read> BgenSteam<T> {
             pos,
             number_alleles: num_alleles,
             alleles: alleles?,
+            file_start_position,
+            size_in_bytes,
         };
-        let bytes_until_next_data_block = self.read_u32()?;
-        self.skip_bytes(bytes_until_next_data_block as usize)?;
         Ok(variant_data)
     }
 
@@ -153,11 +167,10 @@ impl<T: Read> BgenSteam<T> {
     }
 
     fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
-        // println!("Num bytes to skip: {}", num_bytes);
         if num_bytes > 0 {
             let mut vec = vec![0; num_bytes];
+            self.add_counter(num_bytes);
             self.read_exact(vec.as_mut_slice())?;
-            // String::from_utf8_lossy(vec.as_slice());
         }
         Ok(())
     }
