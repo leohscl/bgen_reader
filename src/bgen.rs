@@ -9,6 +9,8 @@ use std::time::SystemTime;
 use color_eyre::Report;
 use color_eyre::Result;
 
+use crate::parser::Range;
+
 pub struct BgenSteam<T> {
     stream: BufReader<T>,
     pub start_data_offset: u32,
@@ -53,6 +55,15 @@ impl VariantData {
             self.alleles[1].to_string(),
         ]
         .join("\t")
+    }
+
+    pub fn filter_with_range(&self, opt_range: &Option<Range>) -> bool {
+        if let Some(range) = opt_range {
+            let inside = range.chr == self.chr && range.start <= self.pos && self.pos <= range.end;
+            !inside ^ range.incl
+        } else {
+            true
+        }
     }
 }
 

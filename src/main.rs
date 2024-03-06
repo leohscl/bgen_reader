@@ -1,6 +1,6 @@
 use bgen_reader::bgen::BgenSteam;
 use bgen_reader::bgi_writer::TableCreator;
-use bgen_reader::parser::{Cli, Command};
+use bgen_reader::parser::{validate_parsing, Cli, Command};
 use clap::Parser;
 use color_eyre::Result;
 
@@ -17,15 +17,21 @@ fn main() -> Result<()> {
             table_creator.init(bgen_stream.metadata.unwrap())?;
             table_creator.store(&bgen_stream.variants_data)?;
         }
-        Command::List => {
+        Command::List { range: range_str } => {
+            dbg!(&range_str);
+            let opt_range = match validate_parsing(range_str) {
+                Ok(range) => range,
+                Err(cmd_error) => cmd_error.exit(),
+            };
+            dbg!(&opt_range);
             let variant_data_str: String = bgen_stream
                 .variants_data
                 .iter()
+                .filter(|variant_data| variant_data.filter_with_range(&opt_range))
                 .map(|variant_data| variant_data.bgenix_print())
                 .collect::<Vec<String>>()
                 .join("\n");
             println!("{}", variant_data_str);
-            // let stdout = io::stdout().write(variant_data_str);
         }
     }
     Ok(())

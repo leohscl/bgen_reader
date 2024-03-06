@@ -3,6 +3,7 @@
 Rust version of the bgenix tool
 
 Missing features:
-- [ ] incl-rsid
+- [x] incl-rsid
 - [ ] incl-range
+- [ ] vcf
 - [ ] v11
