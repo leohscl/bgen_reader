@@ -57,13 +57,24 @@ impl VariantData {
         .join("\t")
     }
 
-    pub fn filter_with_range(&self, opt_range: &Option<Range>) -> bool {
-        if let Some(range) = opt_range {
-            let inside = range.chr == self.chr && range.start <= self.pos && self.pos <= range.end;
-            !inside ^ range.incl
-        } else {
-            true
-        }
+    pub fn filter_with_args(
+        &self,
+        incl_ranges: Vec<Range>,
+        incl_rsids: Vec<String>,
+        excl_ranges: Vec<Range>,
+        excl_rsid: Vec<String>,
+    ) -> bool {
+        self.in_filters(incl_ranges, incl_rsids) && !self.in_filters(excl_ranges, excl_rsid)
+    }
+
+    fn in_filters(&self, ranges: Vec<Range>, rsids: Vec<String>) -> bool {
+        let in_ranges = ranges.iter().fold(false, |acc, r| acc || self.in_range(r));
+        let in_rsids = rsids.iter().fold(false, |acc, r| acc || &self.rsid == r);
+        in_rsids || in_ranges
+    }
+
+    fn in_range(&self, range: &Range) -> bool {
+        range.chr == self.chr && range.start <= self.pos && self.pos <= range.end
     }
 }
 
