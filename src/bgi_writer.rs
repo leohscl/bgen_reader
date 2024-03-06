@@ -1,4 +1,4 @@
-use crate::bgen::VariantData;
+use crate::bgen::{MetadataBgi, VariantData};
 use rusqlite::{Connection, Result, ToSql};
 
 static VARIANT_CREATION_STRING: &str = r#"CREATE TABLE Variant (
@@ -33,9 +33,13 @@ impl TableCreator {
         Ok(table_creator)
     }
 
-    pub fn init(&self) -> Result<()> {
+    pub fn init(&self, meta: MetadataBgi) -> Result<()> {
         self.conn.execute(VARIANT_CREATION_STRING, ())?;
         self.conn.execute(METADATA_CREATION_STRING, ())?;
+        self.conn.execute(
+            "INSERT INTO Metadata (filename, file_size, last_write_time, first_1000_bytes, index_creation_time) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&meta.filename, &meta.file_size, meta.last_write_time.elapsed().unwrap().as_secs(), meta.first_1000_bytes, meta.index_creation_time.elapsed().unwrap().as_secs()),
+        )?;
         Ok(())
     }
 

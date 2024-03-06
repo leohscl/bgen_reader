@@ -3,6 +3,8 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Cursor;
 use std::io::Read;
+use std::path::Path;
+use std::time::SystemTime;
 
 use color_eyre::Report;
 use color_eyre::Result;
@@ -16,9 +18,18 @@ pub struct BgenSteam<T> {
     pub header_flags: HeaderFlags,
     pub variants_data: Vec<VariantData>,
     pub byte_count: usize,
+    pub metadata: Option<MetadataBgi>,
 }
 
-#[derive(Default, Debug)]
+pub struct MetadataBgi {
+    pub filename: String,
+    pub file_size: u64,
+    pub last_write_time: SystemTime,
+    pub first_1000_bytes: Vec<u8>,
+    pub index_creation_time: SystemTime,
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct VariantData {
     pub number_individuals: Option<u32>,
     pub variants_id: String,
@@ -29,6 +40,20 @@ pub struct VariantData {
     pub alleles: Vec<String>,
     pub file_start_position: usize,
     pub size_in_bytes: usize,
+}
+
+impl VariantData {
+    pub fn bgenix_print(&self) -> String {
+        [
+            self.variants_id.to_string(),
+            self.rsid.to_string(),
+            self.pos.to_string(),
+            self.number_alleles.to_string(),
+            self.alleles[0].to_string(),
+            self.alleles[1].to_string(),
+        ]
+        .join("\t")
+    }
 }
 
 macro_rules! read_into_buffer {
@@ -47,7 +72,7 @@ macro_rules! read_into_vector {
 }
 
 impl<T: Read> BgenSteam<T> {
-    pub fn new(stream: BufReader<T>) -> Self {
+    pub fn new(stream: BufReader<T>, metadata: Option<MetadataBgi>) -> Self {
         BgenSteam {
             stream,
             start_data_offset: 0,
@@ -57,6 +82,7 @@ impl<T: Read> BgenSteam<T> {
             header_flags: HeaderFlags::default(),
             variants_data: vec![],
             byte_count: 0,
+            metadata,
         }
     }
     fn add_counter(&mut self, bytes: usize) {
@@ -177,17 +203,39 @@ impl<T: Read> BgenSteam<T> {
 }
 
 impl BgenSteam<File> {
-    pub fn from_path(path: &str) -> Result<Self> {
-        let file = File::open(path)?;
+    pub fn from_path(path_str: &str) -> Result<Self> {
+        // Build metadata for file
+        let path = Path::new(path_str);
+        let filename = path.file_name().ok_or(Report::msg(format!(
+            "File name cannot be extracted from {}",
+            path_str
+        )))?;
+        let metadata_std = std::fs::metadata(path)?;
+        let file_size = metadata_std.len();
+        let index_creation_time = metadata_std.created()?;
+        let last_write_time = metadata_std.modified()?;
+        let mut first_1000_bytes = vec![0; 1000];
+        let mut file = File::open(path_str)?;
+        file.read(first_1000_bytes.as_mut_slice())?;
+
+        let file = File::open(path_str)?;
         let stream = BufReader::new(file);
-        Ok(BgenSteam::new(stream))
+        let metadata = MetadataBgi {
+            filename: filename.to_str().unwrap().to_string(),
+            file_size,
+            index_creation_time,
+            first_1000_bytes,
+            last_write_time,
+        };
+        Ok(BgenSteam::new(stream, Some(metadata)))
     }
 }
 
 impl BgenSteam<Cursor<Vec<u8>>> {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
         let stream = BufReader::new(Cursor::new(bytes));
-        Ok(BgenSteam::new(stream))
+        let metadata = None;
+        Ok(BgenSteam::new(stream, metadata))
     }
 }
 
