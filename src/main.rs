@@ -1,8 +1,6 @@
 use bgen_reader::bgen::BgenSteam;
 use bgen_reader::bgi_writer::TableCreator;
-use bgen_reader::parser::{
-    validate_parsing_range, Cli, Command, ExclRange, ExclRsid, InclRange, InclRsid,
-};
+use bgen_reader::parser::{Cli, Command};
 use clap::Parser;
 use color_eyre::Result;
 
@@ -20,45 +18,8 @@ fn main() -> Result<()> {
             table_creator.store(&bgen_stream.variants_data)?;
         }
         Command::List(list_args) => {
-            // TODO: refactor, with macros ?
-            let opt_incl_range = match list_args.incl_range {
-                InclRange {
-                    incl_range,
-                    incl_range_file: None,
-                } => incl_range,
-                _ => todo!(),
-            };
-            let vec_incl_range = match validate_parsing_range(opt_incl_range) {
-                Ok(range) => range,
-                Err(cmd_error) => cmd_error.exit(),
-            };
-            let opt_excl_range = match list_args.excl_range {
-                ExclRange {
-                    excl_range,
-                    excl_range_file: None,
-                } => excl_range,
-                _ => todo!(),
-            };
-            let vec_excl_range = match validate_parsing_range(opt_excl_range) {
-                Ok(range) => range,
-                Err(cmd_error) => cmd_error.exit(),
-            };
-            let opt_incl_rsid = match list_args.incl_rsid {
-                InclRsid {
-                    incl_rsid,
-                    incl_rsid_file: None,
-                } => incl_rsid,
-                _ => None,
-            };
-            let vec_incl_rsid: Vec<_> = opt_incl_rsid.into_iter().collect();
-            let opt_excl_rsid = match list_args.excl_rsid {
-                ExclRsid {
-                    excl_rsid,
-                    excl_rsid_file: None,
-                } => excl_rsid,
-                _ => None,
-            };
-            let vec_excl_rsid: Vec<_> = opt_excl_rsid.into_iter().collect();
+            let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
+                list_args.get_vector_incl_and_excl();
             let variant_data_str: String = bgen_stream
                 .variants_data
                 .iter()

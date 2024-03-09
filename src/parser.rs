@@ -32,6 +32,50 @@ pub struct ListArgs {
     pub excl_rsid: ExclRsid,
 }
 
+impl ListArgs {
+    pub fn get_vector_incl_and_excl(&self) -> (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>) {
+        let opt_incl_range = match &self.incl_range {
+            InclRange {
+                incl_range,
+                incl_range_file: None,
+            } => incl_range,
+            _ => todo!(),
+        };
+        let vec_incl_range = match validate_parsing_range(opt_incl_range.clone()) {
+            Ok(range) => range,
+            Err(cmd_error) => cmd_error.exit(),
+        };
+        let opt_excl_range = match &self.excl_range {
+            ExclRange {
+                excl_range,
+                excl_range_file: None,
+            } => excl_range,
+            _ => todo!(),
+        };
+        let vec_excl_range = match validate_parsing_range(opt_excl_range.clone()) {
+            Ok(range) => range,
+            Err(cmd_error) => cmd_error.exit(),
+        };
+        let opt_incl_rsid = match &self.incl_rsid {
+            InclRsid {
+                incl_rsid,
+                incl_rsid_file: None,
+            } => incl_rsid.clone(),
+            _ => None,
+        };
+        let vec_incl_rsid: Vec<_> = opt_incl_rsid.into_iter().collect();
+        let opt_excl_rsid = match &self.excl_rsid {
+            ExclRsid {
+                excl_rsid,
+                excl_rsid_file: None,
+            } => excl_rsid.clone(),
+            _ => None,
+        };
+        let vec_excl_rsid: Vec<_> = opt_excl_rsid.into_iter().collect();
+        (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid)
+    }
+}
+
 #[derive(Args)]
 #[group(required = false, multiple = false)]
 pub struct InclRange {
