@@ -18,6 +18,8 @@ pub enum Command {
     List(ListArgs),
     /// Index the bgen file
     Index,
+    /// output VCF information
+    Vcf(ListArgs),
 }
 
 #[derive(Parser)]

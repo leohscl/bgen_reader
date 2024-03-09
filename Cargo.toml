@@ -8,4 +8,6 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.1", features = ["derive"] }
 color-eyre = "0.6.2"
+flate2 = "1.0.28"
 rusqlite = "0.31.0"
+vcf = "0.6.1"

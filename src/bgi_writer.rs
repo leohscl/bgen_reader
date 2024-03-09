@@ -1,4 +1,5 @@
-use crate::bgen::{MetadataBgi, VariantData};
+use crate::bgen::MetadataBgi;
+use crate::variant_data::VariantData;
 use rusqlite::{Connection, Result, ToSql};
 
 static VARIANT_CREATION_STRING: &str = r#"CREATE TABLE Variant (

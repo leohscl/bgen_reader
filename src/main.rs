@@ -1,6 +1,7 @@
 use bgen_reader::bgen::BgenSteam;
 use bgen_reader::bgi_writer::TableCreator;
 use bgen_reader::parser::{Cli, Command};
+use bgen_reader::vcf_writer;
 use clap::Parser;
 use color_eyre::Result;
 
@@ -18,23 +19,17 @@ fn main() -> Result<()> {
             table_creator.store(&bgen_stream.variants_data)?;
         }
         Command::List(list_args) => {
-            let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
-                list_args.get_vector_incl_and_excl();
-            let variant_data_str: String = bgen_stream
-                .variants_data
-                .iter()
-                .filter(|variant_data| {
-                    variant_data.filter_with_args(
-                        vec_incl_range.clone(),
-                        vec_incl_rsid.clone(),
-                        vec_excl_range.clone(),
-                        vec_excl_rsid.clone(),
-                    )
-                })
+            bgen_stream.collect_filters(list_args);
+            let variant_data_str = bgen_stream
+                .get_variant_stream()
                 .map(|variant_data| variant_data.bgenix_print())
                 .collect::<Vec<String>>()
                 .join("\n");
             println!("{}", variant_data_str);
+        }
+        Command::Vcf(list_args) => {
+            bgen_stream.collect_filters(list_args);
+            vcf_writer::write_vcf("test.vcf", bgen_stream)?;
         }
     }
     Ok(())

@@ -1,3 +1,8 @@
+use crate::parser::ListArgs;
+use crate::parser::Range;
+use crate::variant_data::VariantData;
+use color_eyre::Report;
+use color_eyre::Result;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -5,11 +10,6 @@ use std::io::Cursor;
 use std::io::Read;
 use std::path::Path;
 use std::time::SystemTime;
-
-use color_eyre::Report;
-use color_eyre::Result;
-
-use crate::parser::Range;
 
 pub struct BgenSteam<T> {
     stream: BufReader<T>,
@@ -21,6 +21,10 @@ pub struct BgenSteam<T> {
     pub variants_data: Vec<VariantData>,
     pub byte_count: usize,
     pub metadata: Option<MetadataBgi>,
+    pub incl_range: Vec<Range>,
+    pub incl_rsids: Vec<String>,
+    pub excl_range: Vec<Range>,
+    pub excl_rsids: Vec<String>,
 }
 
 pub struct MetadataBgi {
@@ -29,53 +33,6 @@ pub struct MetadataBgi {
     pub last_write_time: SystemTime,
     pub first_1000_bytes: Vec<u8>,
     pub index_creation_time: SystemTime,
-}
-
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct VariantData {
-    pub number_individuals: Option<u32>,
-    pub variants_id: String,
-    pub rsid: String,
-    pub chr: String,
-    pub pos: u32,
-    pub number_alleles: u16,
-    pub alleles: Vec<String>,
-    pub file_start_position: usize,
-    pub size_in_bytes: usize,
-}
-
-impl VariantData {
-    pub fn bgenix_print(&self) -> String {
-        [
-            self.variants_id.to_string(),
-            self.rsid.to_string(),
-            self.pos.to_string(),
-            self.number_alleles.to_string(),
-            self.alleles[0].to_string(),
-            self.alleles[1].to_string(),
-        ]
-        .join("\t")
-    }
-
-    pub fn filter_with_args(
-        &self,
-        incl_ranges: Vec<Range>,
-        incl_rsids: Vec<String>,
-        excl_ranges: Vec<Range>,
-        excl_rsid: Vec<String>,
-    ) -> bool {
-        self.in_filters(incl_ranges, incl_rsids) && !self.in_filters(excl_ranges, excl_rsid)
-    }
-
-    fn in_filters(&self, ranges: Vec<Range>, rsids: Vec<String>) -> bool {
-        let in_ranges = ranges.iter().fold(false, |acc, r| acc || self.in_range(r));
-        let in_rsids = rsids.iter().fold(false, |acc, r| acc || &self.rsid == r);
-        in_rsids || in_ranges
-    }
-
-    fn in_range(&self, range: &Range) -> bool {
-        range.chr == self.chr && range.start <= self.pos && self.pos <= range.end
-    }
 }
 
 macro_rules! read_into_buffer {
@@ -105,6 +62,10 @@ impl<T: Read> BgenSteam<T> {
             variants_data: vec![],
             byte_count: 0,
             metadata,
+            incl_range: vec![],
+            incl_rsids: vec![],
+            excl_range: vec![],
+            excl_rsids: vec![],
         }
     }
     fn add_counter(&mut self, bytes: usize) {
@@ -222,6 +183,17 @@ impl<T: Read> BgenSteam<T> {
         }
         Ok(())
     }
+
+    pub fn get_variant_stream(self) -> Box<dyn Iterator<Item = VariantData>> {
+        Box::new(self.variants_data.into_iter().filter(move |variant_data| {
+            variant_data.filter_with_args(
+                &self.incl_range,
+                &self.incl_rsids,
+                &self.excl_range,
+                &self.excl_rsids,
+            )
+        }))
+    }
 }
 
 impl BgenSteam<File> {
@@ -250,6 +222,15 @@ impl BgenSteam<File> {
             last_write_time,
         };
         Ok(BgenSteam::new(stream, Some(metadata)))
+    }
+
+    pub fn collect_filters(&mut self, list_args: ListArgs) {
+        let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
+            list_args.get_vector_incl_and_excl();
+        self.incl_range = vec_incl_range;
+        self.incl_rsids = vec_incl_rsid;
+        self.excl_range = vec_excl_range;
+        self.excl_rsids = vec_excl_rsid;
     }
 }
 
