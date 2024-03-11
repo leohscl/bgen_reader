@@ -1,6 +1,7 @@
 use crate::bgen::MetadataBgi;
 use crate::variant_data::VariantData;
-use rusqlite::{Connection, Result, ToSql};
+use itertools::Itertools;
+use rusqlite::{params_from_iter, Connection, Result, ToSql};
 
 static VARIANT_CREATION_STRING: &str = r#"CREATE TABLE Variant (
   chromosome TEXT NOT NULL,
@@ -44,13 +45,16 @@ impl TableCreator {
         Ok(())
     }
 
-    pub fn store(&self, data: &Vec<VariantData>) -> Result<()> {
+    pub fn store(&self, data: impl Iterator<Item = VariantData>) -> Result<()> {
         data.chunks(10000)
+            .into_iter()
             .map(|chunk| {
-                let statement = create_statement_batch_params(chunk.len());
+                let chunk_vec: Vec<_> = chunk.into_iter().collect();
+                let size = chunk_vec.len();
+                let statement = create_statement_batch_params(size);
                 let mut cached_statement = self.conn.prepare_cached(&statement)?;
                 let mut params = Vec::new();
-                chunk.iter().for_each(|var_data| {
+                chunk_vec.iter().for_each(|var_data| {
                     params.push(&var_data.chr as &dyn ToSql);
                     params.push(&var_data.pos as &dyn ToSql);
                     params.push(&var_data.rsid as &dyn ToSql);
@@ -60,7 +64,7 @@ impl TableCreator {
                     params.push(&var_data.file_start_position as &dyn ToSql);
                     params.push(&var_data.size_in_bytes as &dyn ToSql);
                 });
-                cached_statement.execute(&*params)
+                cached_statement.execute(params_from_iter(params.iter()))
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(())

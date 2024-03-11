@@ -16,9 +16,9 @@ pub struct BgenSteam<T> {
     pub start_data_offset: u32,
     pub header_size: u32,
     pub variant_num: u32,
+    variant_count: u32,
     pub sample_num: u32,
     pub header_flags: HeaderFlags,
-    pub variants_data: Vec<VariantData>,
     pub byte_count: usize,
     pub metadata: Option<MetadataBgi>,
     pub incl_range: Vec<Range>,
@@ -58,9 +58,9 @@ impl<T: Read> BgenSteam<T> {
             start_data_offset: 0,
             header_size: 0,
             variant_num: 0,
+            variant_count: 0,
             sample_num: 0,
             header_flags: HeaderFlags::default(),
-            variants_data: vec![],
             byte_count: 0,
             metadata,
             incl_range: vec![],
@@ -125,12 +125,12 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
-    pub fn read_all_variant_data(&mut self) -> Result<()> {
-        self.variants_data = (0..self.variant_num)
-            .map(|_| self.read_variant_data())
-            .collect::<Result<Vec<_>>>()?;
-        Ok(())
-    }
+    // pub fn read_all_variant_data(&mut self) -> Result<()> {
+    //     self.variants_data = (0..self.variant_num)
+    //         .map(|_| self.read_variant_data())
+    //         .collect::<Result<Vec<_>>>()?;
+    //     Ok(())
+    // }
 
     fn read_variant_data(&mut self) -> Result<VariantData> {
         let file_start_position = self.byte_count;
@@ -208,15 +208,27 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
-    pub fn get_variant_stream(self) -> Box<dyn Iterator<Item = VariantData>> {
-        Box::new(self.variants_data.into_iter().filter(move |variant_data| {
-            variant_data.filter_with_args(
-                &self.incl_range,
-                &self.incl_rsids,
-                &self.excl_range,
-                &self.excl_rsids,
-            )
-        }))
+    // pub fn get_variant_stream(self) -> Box<dyn Iterator<Item = VariantData>> {
+    //     Box::new(self.variants_data.into_iter().filter(move |variant_data| {
+    //         variant_data.filter_with_args(
+    //             &self.incl_range,
+    //             &self.incl_rsids,
+    //             &self.excl_range,
+    //             &self.excl_rsids,
+    //         )
+    //     }))
+    // }
+}
+
+impl<T: Read> Iterator for BgenSteam<T> {
+    type Item = Result<VariantData>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.variant_num += 1;
+        if self.variant_count == self.variant_num {
+            None
+        } else {
+            Some(self.read_variant_data())
+        }
     }
 }
 

@@ -3,7 +3,8 @@
 Rust version of the bgenix tool
 
 Missing features:
-- [x] samples reading
+- [x] samples reading from bgen
+- [ ] samples reading from sample
 - [ ] genotype reading
 - [ ] iterator implementation for bgenstream
 - [x] index file

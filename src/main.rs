@@ -10,7 +10,6 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let mut bgen_stream = BgenSteam::from_path(&cli.filename)?;
     bgen_stream.read_offset_and_header()?;
-    bgen_stream.read_all_variant_data()?;
     match cli.command {
         Command::Index => {
             let bgi_filename = cli.filename.to_string() + ".bgi_rust";
@@ -21,9 +20,9 @@ fn main() -> Result<()> {
         Command::List(list_args) => {
             bgen_stream.collect_filters(list_args);
             let variant_data_str = bgen_stream
-                .get_variant_stream()
-                .map(|variant_data| variant_data.bgenix_print())
-                .collect::<Vec<String>>()
+                .into_iter()
+                .map(|variant_data| Ok(variant_data?.bgenix_print()))
+                .collect::<Result<Vec<String>>>()?
                 .join("\n");
             println!("{}", variant_data_str);
         }
