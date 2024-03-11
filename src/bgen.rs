@@ -208,26 +208,34 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
-    // pub fn get_variant_stream(self) -> Box<dyn Iterator<Item = VariantData>> {
-    //     Box::new(self.variants_data.into_iter().filter(move |variant_data| {
-    //         variant_data.filter_with_args(
-    //             &self.incl_range,
-    //             &self.incl_rsids,
-    //             &self.excl_range,
-    //             &self.excl_rsids,
-    //         )
-    //     }))
-    // }
+    pub fn collect_filters(&mut self, list_args: ListArgs) {
+        let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
+            list_args.get_vector_incl_and_excl();
+        self.incl_range = vec_incl_range;
+        self.incl_rsids = vec_incl_rsid;
+        self.excl_range = vec_excl_range;
+        self.excl_rsids = vec_excl_rsid;
+    }
 }
 
 impl<T: Read> Iterator for BgenSteam<T> {
     type Item = Result<VariantData>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.variant_num += 1;
-        if self.variant_count == self.variant_num {
+        if self.variant_count >= self.variant_num {
             None
         } else {
-            Some(self.read_variant_data())
+            while let Ok(var_data) = self.read_variant_data() {
+                self.variant_count += 1;
+                if var_data.filter_with_args(
+                    &self.incl_range,
+                    &self.incl_rsids,
+                    &self.excl_range,
+                    &self.excl_rsids,
+                ) {
+                    return Some(Ok(var_data));
+                }
+            }
+            None
         }
     }
 }
@@ -267,15 +275,6 @@ impl BgenSteam<File> {
             last_write_time,
         };
         Ok(BgenSteam::new(stream, Some(metadata), samples))
-    }
-
-    pub fn collect_filters(&mut self, list_args: ListArgs) {
-        let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
-            list_args.get_vector_incl_and_excl();
-        self.incl_range = vec_incl_range;
-        self.incl_rsids = vec_incl_rsid;
-        self.excl_range = vec_excl_range;
-        self.excl_rsids = vec_excl_rsid;
     }
 }
 

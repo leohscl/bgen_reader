@@ -22,7 +22,7 @@ pub enum Command {
     Vcf(ListArgs),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Default)]
 pub struct ListArgs {
     #[command(flatten)]
     pub incl_range: InclRange,
@@ -35,6 +35,18 @@ pub struct ListArgs {
 }
 
 impl ListArgs {
+    pub fn with_incl_str(incl_str: String) -> Self {
+        ListArgs {
+            incl_range: InclRange {
+                incl_range: Some(incl_str),
+                incl_range_file: None,
+            },
+            incl_rsid: InclRsid::default(),
+            excl_range: ExclRange::default(),
+            excl_rsid: ExclRsid::default(),
+        }
+    }
+
     pub fn get_vector_incl_and_excl(&self) -> (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>) {
         let opt_incl_range = match &self.incl_range {
             InclRange {
@@ -78,7 +90,7 @@ impl ListArgs {
     }
 }
 
-#[derive(Args)]
+#[derive(Args, Default)]
 #[group(required = false, multiple = false)]
 pub struct InclRange {
     #[arg(long)]
@@ -89,7 +101,7 @@ pub struct InclRange {
     pub incl_range_file: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Default)]
 #[group(required = false, multiple = false)]
 pub struct ExclRange {
     #[arg(long)]
@@ -100,7 +112,7 @@ pub struct ExclRange {
     pub excl_range_file: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Default)]
 #[group(required = false, multiple = false)]
 pub struct InclRsid {
     #[arg(long)]
@@ -111,7 +123,7 @@ pub struct InclRsid {
     pub incl_rsid_file: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Default)]
 #[group(required = false, multiple = false)]
 pub struct ExclRsid {
     #[arg(long)]
