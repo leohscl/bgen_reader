@@ -14,8 +14,8 @@ fn main() -> Result<()> {
         Command::Index => {
             let bgi_filename = cli.filename.to_string() + ".bgi_rust";
             let table_creator = TableCreator::new(bgi_filename)?;
-            table_creator.init(bgen_stream.metadata.unwrap())?;
-            table_creator.store(&bgen_stream.variants_data)?;
+            table_creator.init(bgen_stream.metadata.as_ref().unwrap())?;
+            table_creator.store(bgen_stream.into_iter())?;
         }
         Command::List(list_args) => {
             bgen_stream.collect_filters(list_args);
