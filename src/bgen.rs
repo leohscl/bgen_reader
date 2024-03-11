@@ -25,6 +25,7 @@ pub struct BgenSteam<T> {
     pub incl_rsids: Vec<String>,
     pub excl_range: Vec<Range>,
     pub excl_rsids: Vec<String>,
+    pub samples: Vec<String>,
 }
 
 pub struct MetadataBgi {
@@ -51,7 +52,7 @@ macro_rules! read_into_vector {
 }
 
 impl<T: Read> BgenSteam<T> {
-    pub fn new(stream: BufReader<T>, metadata: Option<MetadataBgi>) -> Self {
+    pub fn new(stream: BufReader<T>, metadata: Option<MetadataBgi>, samples: Vec<String>) -> Self {
         BgenSteam {
             stream,
             start_data_offset: 0,
@@ -66,6 +67,7 @@ impl<T: Read> BgenSteam<T> {
             incl_rsids: vec![],
             excl_range: vec![],
             excl_rsids: vec![],
+            samples,
         }
     }
     fn add_counter(&mut self, bytes: usize) {
@@ -96,11 +98,33 @@ impl<T: Read> BgenSteam<T> {
         self.skip_bytes(self.header_size as usize - 20)?;
         self.header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
         println!("Layout id: {}", self.header_flags.layout_id);
-        // For now, we ignore sample info, if it exists
-        let bytes_until_data_start = self.start_data_offset - (self.header_size);
-        self.skip_bytes(bytes_until_data_start as usize)?;
+
+        if self.header_flags.sample_id_present {
+            self.read_samples()?;
+        }
+        assert!(self.start_data_offset as usize == self.byte_count - 4);
         Ok(())
     }
+
+    pub fn read_samples(&mut self) -> Result<()> {
+        let _length_samples_id = self.read_u32()?;
+        let num_samples = self.read_u32()?;
+        let new_samples: Vec<_> = (0..num_samples)
+            .map(|_| {
+                let length_s = self.read_u16()?;
+                self.read_string(length_s as usize)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if !self.samples.is_empty() {
+            assert_eq!(
+                self.samples, new_samples,
+                "Samples embedded in bgen file and in .sample file do not match."
+            );
+        }
+        self.samples = new_samples;
+        Ok(())
+    }
+
     pub fn read_all_variant_data(&mut self) -> Result<()> {
         self.variants_data = (0..self.variant_num)
             .map(|_| self.read_variant_data())
@@ -204,6 +228,15 @@ impl BgenSteam<File> {
             "File name cannot be extracted from {}",
             path_str
         )))?;
+        let sample_path = path.with_extension("sample");
+        let samples = if let Ok(file) = File::open(sample_path) {
+            println!("Reading samples from .sample file");
+            let samples_reader = BufReader::new(file);
+            samples_reader.lines().flatten().collect()
+        } else {
+            vec![]
+        };
+
         let metadata_std = std::fs::metadata(path)?;
         let file_size = metadata_std.len();
         let index_creation_time = metadata_std.created()?;
@@ -221,7 +254,7 @@ impl BgenSteam<File> {
             first_1000_bytes,
             last_write_time,
         };
-        Ok(BgenSteam::new(stream, Some(metadata)))
+        Ok(BgenSteam::new(stream, Some(metadata), samples))
     }
 
     pub fn collect_filters(&mut self, list_args: ListArgs) {
@@ -238,7 +271,7 @@ impl BgenSteam<Cursor<Vec<u8>>> {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
         let stream = BufReader::new(Cursor::new(bytes));
         let metadata = None;
-        Ok(BgenSteam::new(stream, metadata))
+        Ok(BgenSteam::new(stream, metadata, vec![]))
     }
 }
 
