@@ -6,7 +6,7 @@ Missing features:
 - [x] samples reading from bgen
 - [ ] samples reading from sample
 - [ ] genotype reading
-- [ ] iterator implementation for bgenstream
+- [x] iterator implementation for bgenstream
 - [x] index file
 - [x] list
 - [x] incl-range
@@ -14,4 +14,3 @@ Missing features:
 - [x] excl-range
 - [x] excl-rsid
 - [ ] vcf
-- [ ] v11
