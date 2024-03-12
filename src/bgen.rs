@@ -1,6 +1,6 @@
 use crate::parser::ListArgs;
 use crate::parser::Range;
-use crate::variant_data::VariantData;
+use crate::variant_data::{DataBlock, VariantData};
 use color_eyre::Report;
 use color_eyre::Result;
 use itertools::Itertools;
@@ -126,13 +126,6 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
-    // pub fn read_all_variant_data(&mut self) -> Result<()> {
-    //     self.variants_data = (0..self.variant_num)
-    //         .map(|_| self.read_variant_data())
-    //         .collect::<Result<Vec<_>>>()?;
-    //     Ok(())
-    // }
-
     fn read_variant_data(&mut self) -> Result<VariantData> {
         let file_start_position = self.byte_count;
         let layout_id = self.header_flags.layout_id;
@@ -149,10 +142,16 @@ impl<T: Read> BgenSteam<T> {
         let alleles: Result<Vec<String>> = (0..num_alleles)
             .map(|_| self.read_u32_sized_string())
             .collect();
-        let bytes_until_next_data_block = self.read_u32()?;
-        self.skip_bytes(bytes_until_next_data_block as usize)?;
+        let read_data_block = false;
         let file_end_position = self.byte_count;
         let size_in_bytes = file_end_position - file_start_position;
+        let data_block = if read_data_block {
+            todo!()
+        } else {
+            let bytes_until_next_data_block = self.read_u32()?;
+            self.skip_bytes(bytes_until_next_data_block as usize)?;
+            DataBlock::default()
+        };
         let variant_data = VariantData {
             number_individuals,
             variants_id,
@@ -163,6 +162,7 @@ impl<T: Read> BgenSteam<T> {
             alleles: alleles?,
             file_start_position,
             size_in_bytes,
+            data_block,
         };
         Ok(variant_data)
     }

@@ -13,6 +13,19 @@ pub struct VariantData {
     pub alleles: Vec<String>,
     pub file_start_position: usize,
     pub size_in_bytes: usize,
+    pub data_block: DataBlock,
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct DataBlock {
+    number_individuals: u32,
+    number_alleles: u16,
+    minimum_ploidy: u8,
+    maximum_ploidy: u8,
+    ploidy_missingness: Vec<u8>,
+    phased: bool,
+    bytes_probability: u8,
+    probabilities: Vec<u8>,
 }
 
 impl VariantData {
