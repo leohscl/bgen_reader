@@ -91,7 +91,7 @@ impl<T: Read> BgenSteam<T> {
         println!("Number of samples: {}", self.sample_num);
         assert!(self.sample_num > 0);
         read_into_buffer!(magic_num, self, 4);
-        if !(&magic_num == &[0u8; 4] || &magic_num == b"bgen") {
+        if !(magic_num == [0u8; 4] || &magic_num == b"bgen") {
             return Err(Report::msg(
                 "Magic number in header is not correct. The data is most likely corrupted",
             ));
@@ -143,8 +143,6 @@ impl<T: Read> BgenSteam<T> {
             .map(|_| self.read_u32_sized_string())
             .collect();
         let read_data_block = false;
-        let file_end_position = self.byte_count;
-        let size_in_bytes = file_end_position - file_start_position;
         let data_block = if read_data_block {
             todo!()
         } else {
@@ -152,6 +150,8 @@ impl<T: Read> BgenSteam<T> {
             self.skip_bytes(bytes_until_next_data_block as usize)?;
             DataBlock::default()
         };
+        let file_end_position = self.byte_count;
+        let size_in_bytes = file_end_position - file_start_position;
         let variant_data = VariantData {
             number_individuals,
             variants_id,
@@ -187,7 +187,7 @@ impl<T: Read> BgenSteam<T> {
         Ok(buffer
             .iter()
             .enumerate()
-            .map(|(i, b)| (1 << i * 8) * (*b as u16))
+            .map(|(i, b)| (1 << (i * 8)) * (*b as u16))
             .sum())
     }
 
@@ -196,7 +196,7 @@ impl<T: Read> BgenSteam<T> {
         Ok(buffer
             .iter()
             .enumerate()
-            .map(|(i, b)| (1 << i * 8) * (*b as u32))
+            .map(|(i, b)| (1 << (i * 8)) * (*b as u32))
             .sum())
     }
 
@@ -273,7 +273,7 @@ impl BgenSteam<File> {
         let last_write_time = metadata_std.modified()?;
         let mut first_1000_bytes = vec![0; 1000];
         let mut file = File::open(path_str)?;
-        file.read(first_1000_bytes.as_mut_slice())?;
+        file.read_exact(first_1000_bytes.as_mut_slice())?;
 
         let file = File::open(path_str)?;
         let stream = BufReader::new(file);

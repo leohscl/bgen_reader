@@ -1,7 +1,7 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::BgenSteam;
 use bgen_reader::parser::ListArgs;
-use bgen_reader::variant_data::VariantData;
+use bgen_reader::variant_data::{DataBlock, VariantData};
 use std::io::Cursor;
 
 #[test]
@@ -25,6 +25,7 @@ fn first_variant_correct() {
         alleles: vec!["G".to_string(), "A".to_string()],
         file_start_position: 1732,
         size_in_bytes: 127,
+        data_block: DataBlock::default(),
     };
     assert_eq!(first_variant_data, variant_data[0]);
 }

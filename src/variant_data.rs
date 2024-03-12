@@ -57,10 +57,10 @@ impl VariantData {
 
     pub fn filter_with_args(
         &self,
-        incl_ranges: &Vec<Range>,
-        incl_rsids: &Vec<String>,
-        excl_ranges: &Vec<Range>,
-        excl_rsid: &Vec<String>,
+        incl_ranges: &[Range],
+        incl_rsids: &[String],
+        excl_ranges: &[Range],
+        excl_rsid: &[String],
     ) -> bool {
         // edge case: no inclusion filters, all variants are included if not excluded
         if incl_ranges.is_empty() && incl_rsids.is_empty() {
@@ -69,9 +69,9 @@ impl VariantData {
         self.in_filters(incl_ranges, incl_rsids) && !self.in_filters(excl_ranges, excl_rsid)
     }
 
-    fn in_filters(&self, ranges: &Vec<Range>, rsids: &Vec<String>) -> bool {
-        let in_ranges = ranges.iter().fold(false, |acc, r| acc || self.in_range(r));
-        let in_rsids = rsids.iter().fold(false, |acc, r| acc || &self.rsid == r);
+    fn in_filters(&self, ranges: &[Range], rsids: &[String]) -> bool {
+        let in_ranges = ranges.iter().any(|r| self.in_range(r));
+        let in_rsids = rsids.iter().any(|r| &self.rsid == r);
         in_rsids || in_ranges
     }
 

@@ -32,7 +32,7 @@ pub struct TableCreator {
 impl TableCreator {
     pub fn new(filename: String) -> Result<Self> {
         let table_creator = TableCreator {
-            conn: Connection::open(&filename)?,
+            conn: Connection::open(filename)?,
         };
         Ok(table_creator)
     }

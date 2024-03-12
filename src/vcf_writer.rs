@@ -28,10 +28,9 @@ pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>)
     let vec_samples = vec![];
     let header = VCFHeader::new(vec_header_line, vec_samples);
     let mut vcf_writer = vcf::VCFWriter::new(writer, &header)?;
-    bgen_stream
-        .into_iter()
-        .map(|var_data| Ok(vcf_writer.write_record(&var_data?.to_record(header.clone())?)?))
-        .collect()
+    bgen_stream.into_iter().try_for_each(|var_data| {
+        Ok(vcf_writer.write_record(&var_data?.to_record(header.clone())?)?)
+    })
 }
 
 fn write_header<T: Write>(writer: T) -> Result<VCFWriter<T>> {

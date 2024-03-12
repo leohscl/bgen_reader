@@ -15,12 +15,11 @@ fn main() -> Result<()> {
             let bgi_filename = cli.filename.to_string() + ".bgi_rust";
             let table_creator = TableCreator::new(bgi_filename)?;
             table_creator.init(bgen_stream.metadata.as_ref().unwrap())?;
-            table_creator.store(bgen_stream.into_iter())?;
+            table_creator.store(bgen_stream)?;
         }
         Command::List(list_args) => {
             bgen_stream.collect_filters(list_args);
             let variant_data_str = bgen_stream
-                .into_iter()
                 .map(|variant_data| Ok(variant_data?.bgenix_print()))
                 .collect::<Result<Vec<String>>>()?
                 .join("\n");
