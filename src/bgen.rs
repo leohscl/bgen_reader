@@ -3,6 +3,7 @@ use crate::parser::Range;
 use crate::variant_data::VariantData;
 use color_eyre::Report;
 use color_eyre::Result;
+use itertools::Itertools;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -241,7 +242,7 @@ impl<T: Read> Iterator for BgenSteam<T> {
 }
 
 impl BgenSteam<File> {
-    pub fn from_path(path_str: &str) -> Result<Self> {
+    pub fn from_path(path_str: &str, use_sample_file: bool) -> Result<Self> {
         // Build metadata for file
         let path = Path::new(path_str);
         let filename = path.file_name().ok_or(Report::msg(format!(
@@ -250,9 +251,18 @@ impl BgenSteam<File> {
         )))?;
         let sample_path = path.with_extension("sample");
         let samples = if let Ok(file) = File::open(sample_path) {
-            println!("Reading samples from .sample file");
-            let samples_reader = BufReader::new(file);
-            samples_reader.lines().flatten().collect()
+            if use_sample_file {
+                println!("Reading samples from .sample file");
+                let samples_reader = BufReader::new(file);
+                samples_reader
+                    .lines()
+                    .skip(2)
+                    .flatten()
+                    .map(|line| line.split_whitespace().take(2).join(" "))
+                    .collect()
+            } else {
+                vec![]
+            }
         } else {
             vec![]
         };

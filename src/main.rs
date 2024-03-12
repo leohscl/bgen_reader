@@ -8,7 +8,7 @@ use color_eyre::Result;
 fn main() -> Result<()> {
     color_eyre::install()?;
     let cli = Cli::parse();
-    let mut bgen_stream = BgenSteam::from_path(&cli.filename)?;
+    let mut bgen_stream = BgenSteam::from_path(&cli.filename, cli.use_sample_file)?;
     bgen_stream.read_offset_and_header()?;
     match cli.command {
         Command::Index => {
