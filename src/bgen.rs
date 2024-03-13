@@ -3,6 +3,7 @@ use crate::parser::Range;
 use crate::variant_data::{DataBlock, VariantData};
 use color_eyre::Report;
 use color_eyre::Result;
+use flate2::bufread::ZlibDecoder;
 use itertools::Itertools;
 use std::fs::File;
 use std::io::BufRead;
@@ -142,9 +143,10 @@ impl<T: Read> BgenSteam<T> {
         let alleles: Result<Vec<String>> = (0..num_alleles)
             .map(|_| self.read_u32_sized_string())
             .collect();
-        let read_data_block = false;
+        // let read_data_block = false;
+        let read_data_block = true;
         let data_block = if read_data_block {
-            todo!()
+            self.read_data_block()?
         } else {
             let bytes_until_next_data_block = self.read_u32()?;
             self.skip_bytes(bytes_until_next_data_block as usize)?;
@@ -167,6 +169,86 @@ impl<T: Read> BgenSteam<T> {
         Ok(variant_data)
     }
 
+    fn read_data_block(&mut self) -> Result<DataBlock> {
+        assert_eq!(
+            self.header_flags.layout_id, 2,
+            "Layouts other than 2 are not yet supported"
+        );
+        let length_data_block = self.read_u32()?;
+        let compressed_snp_blocks = self.header_flags.compressed_snp_blocks;
+        let uncompressed_length = if compressed_snp_blocks {
+            self.read_u32()?
+        } else {
+            length_data_block
+        };
+        // TODO(lhenches): handle other cases
+        assert!(compressed_snp_blocks);
+        let compressed_block = self.read_vector_length((length_data_block - 4) as usize)?;
+        let uncompressed_block = Self::decompress_block(compressed_block)?;
+        assert_eq!(
+            uncompressed_block.len(),
+            uncompressed_length as usize,
+            "Uncompressed data length is expected to be the same as uncompressed_length"
+        );
+        Self::build_from_uncompressed_block(uncompressed_block)
+    }
+
+    fn build_from_uncompressed_block(block: Vec<u8>) -> Result<DataBlock> {
+        let mut bytes = block.into_iter();
+
+        let number_individuals = u32::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let number_alleles = u16::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let minimum_ploidy = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let maximum_ploidy = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let mut ploidy_missingness = Vec::new();
+        for _ in 0..number_individuals {
+            ploidy_missingness.push(bytes.next().unwrap());
+        }
+        let phased_u8 = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let phased = match phased_u8 {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Report::msg("Phased byte is incorrect")),
+        }?;
+        let bytes_probability = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let data_block = DataBlock {
+            number_individuals,
+            bytes_probability,
+            maximum_ploidy,
+            minimum_ploidy,
+            ploidy_missingness,
+            phased,
+            number_alleles,
+            probabilities: Vec::new(),
+        };
+
+        Ok(data_block)
+    }
+
+    fn convert<U: std::fmt::Debug, const N: usize>(
+        block: Box<&mut dyn Iterator<Item = U>>,
+    ) -> [U; N] {
+        block
+            .take(N)
+            .collect::<Vec<U>>()
+            .try_into()
+            .expect("Conversion failed. Data is most likely corrupted")
+    }
+
+    fn decompress_block(block: Vec<u8>) -> Result<Vec<u8>> {
+        let mut decoder = ZlibDecoder::new(Cursor::new(block));
+        let mut decoded = Vec::new();
+        decoder
+            .read_to_end(&mut decoded)
+            .map_err(|_| Report::msg("Error in decompression"))?;
+        Ok(decoded)
+    }
+
+    fn read_vector_length(&mut self, length: usize) -> Result<Vec<u8>> {
+        read_into_vector!(bytes, self, length);
+        Ok(bytes)
+    }
+
     fn read_u32_sized_string(&mut self) -> Result<String> {
         let size = self.read_u32()? as usize;
         self.read_string(size)
@@ -184,20 +266,17 @@ impl<T: Read> BgenSteam<T> {
 
     fn read_u16(&mut self) -> Result<u16> {
         read_into_buffer!(buffer, self, 2);
-        Ok(buffer
-            .iter()
-            .enumerate()
-            .map(|(i, b)| (1 << (i * 8)) * (*b as u16))
-            .sum())
+        Ok(u16::from_le_bytes(buffer))
+    }
+
+    fn read_u8(&mut self) -> Result<u8> {
+        read_into_buffer!(buffer, self, 1);
+        Ok(u8::from_le_bytes(buffer))
     }
 
     fn read_u32(&mut self) -> Result<u32> {
         read_into_buffer!(buffer, self, 4);
-        Ok(buffer
-            .iter()
-            .enumerate()
-            .map(|(i, b)| (1 << (i * 8)) * (*b as u32))
-            .sum())
+        Ok(u32::from_le_bytes(buffer))
     }
 
     fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
