@@ -15,6 +15,22 @@ fn variants_num_read() {
 fn first_variant_correct() {
     let bgen_stream = create_bgen_and_read();
     let variant_data: Vec<_> = bgen_stream.into_iter().map(|r| r.unwrap()).collect();
+    let data_block = DataBlock {
+        number_individuals: 100,
+        number_alleles: 2,
+        minimum_ploidy: 2,
+        maximum_ploidy: 2,
+        ploidy_missingness: [
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        ]
+        .to_vec(),
+        phased: false,
+        bytes_probability: 16,
+        probabilities: [].to_vec(),
+    };
     let first_variant_data = VariantData {
         number_individuals: None,
         variants_id: "".to_string(),
@@ -25,7 +41,7 @@ fn first_variant_correct() {
         alleles: vec!["G".to_string(), "A".to_string()],
         file_start_position: 1732,
         size_in_bytes: 127,
-        data_block: DataBlock::default(),
+        data_block,
     };
     assert_eq!(first_variant_data, variant_data[0]);
 }

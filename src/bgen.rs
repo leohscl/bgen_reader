@@ -269,11 +269,6 @@ impl<T: Read> BgenSteam<T> {
         Ok(u16::from_le_bytes(buffer))
     }
 
-    fn read_u8(&mut self) -> Result<u8> {
-        read_into_buffer!(buffer, self, 1);
-        Ok(u8::from_le_bytes(buffer))
-    }
-
     fn read_u32(&mut self) -> Result<u32> {
         read_into_buffer!(buffer, self, 4);
         Ok(u32::from_le_bytes(buffer))
