@@ -2,7 +2,7 @@
 
 Rust version of the bgenix tool
 
-Missing features:
+Features:
 - [x] samples reading from bgen
 - [x] samples reading from sample file
 - [x] iterator implementation for bgenstream

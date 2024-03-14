@@ -25,7 +25,7 @@ pub struct DataBlock {
     pub ploidy_missingness: Vec<u8>,
     pub phased: bool,
     pub bytes_probability: u8,
-    pub probabilities: Vec<u8>,
+    pub probabilities: Vec<u32>,
 }
 
 impl VariantData {

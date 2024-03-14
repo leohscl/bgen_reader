@@ -1,6 +1,7 @@
 use crate::parser::ListArgs;
 use crate::parser::Range;
 use crate::variant_data::{DataBlock, VariantData};
+use bitvec::prelude::*;
 use color_eyre::Report;
 use color_eyre::Result;
 use flate2::bufread::ZlibDecoder;
@@ -15,19 +16,23 @@ use std::time::SystemTime;
 
 pub struct BgenSteam<T> {
     stream: BufReader<T>,
+    pub header: Header,
+    pub metadata: Option<MetadataBgi>,
+    pub byte_count: usize,
+    pub incl_range: Vec<Range>,
+    pub incl_rsids: Vec<String>,
+    pub excl_range: Vec<Range>,
+    pub excl_rsids: Vec<String>,
+    pub samples: Vec<String>,
+}
+
+pub struct Header {
     pub start_data_offset: u32,
     pub header_size: u32,
     pub variant_num: u32,
     variant_count: u32,
     pub sample_num: u32,
     pub header_flags: HeaderFlags,
-    pub byte_count: usize,
-    pub metadata: Option<MetadataBgi>,
-    pub incl_range: Vec<Range>,
-    pub incl_rsids: Vec<String>,
-    pub excl_range: Vec<Range>,
-    pub excl_rsids: Vec<String>,
-    pub samples: Vec<String>,
 }
 
 pub struct MetadataBgi {
@@ -55,14 +60,17 @@ macro_rules! read_into_vector {
 
 impl<T: Read> BgenSteam<T> {
     pub fn new(stream: BufReader<T>, metadata: Option<MetadataBgi>, samples: Vec<String>) -> Self {
-        BgenSteam {
-            stream,
+        let header = Header {
             start_data_offset: 0,
             header_size: 0,
             variant_num: 0,
             variant_count: 0,
             sample_num: 0,
             header_flags: HeaderFlags::default(),
+        };
+        BgenSteam {
+            stream,
+            header,
             byte_count: 0,
             metadata,
             incl_range: vec![],
@@ -76,35 +84,43 @@ impl<T: Read> BgenSteam<T> {
         self.byte_count += bytes;
     }
     pub fn read_offset_and_header(&mut self) -> Result<()> {
-        self.start_data_offset = self.read_u32()?;
-        println!("start_data_offset: {}", self.start_data_offset);
-        self.header_size = self.read_u32()?;
-        println!("Header size: {}", self.header_size);
-        if self.header_size < 20 {
+        let start_data_offset = self.read_u32()?;
+        println!("start_data_offset: {}", start_data_offset);
+        let header_size = self.read_u32()?;
+        println!("Header size: {}", header_size);
+        if header_size < 20 {
             return Err(Report::msg(
                 "Header size of bgen is less than 20. The data is most likely corrupted",
             ));
         }
-        self.variant_num = self.read_u32()?;
-        println!("Number of variants: {}", self.variant_num);
-        assert!(self.variant_num > 0);
-        self.sample_num = self.read_u32()?;
-        println!("Number of samples: {}", self.sample_num);
-        assert!(self.sample_num > 0);
+        let variant_num = self.read_u32()?;
+        println!("Number of variants: {}", variant_num);
+        assert!(variant_num > 0);
+        let sample_num = self.read_u32()?;
+        println!("Number of samples: {}", sample_num);
+        assert!(sample_num > 0);
         read_into_buffer!(magic_num, self, 4);
         if !(magic_num == [0u8; 4] || &magic_num == b"bgen") {
             return Err(Report::msg(
                 "Magic number in header is not correct. The data is most likely corrupted",
             ));
         }
-        self.skip_bytes(self.header_size as usize - 20)?;
-        self.header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
-        println!("Layout id: {}", self.header_flags.layout_id);
+        self.skip_bytes(header_size as usize - 20)?;
+        let header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
+        println!("Layout id: {}", header_flags.layout_id);
 
-        if self.header_flags.sample_id_present {
+        if header_flags.sample_id_present {
             self.read_samples()?;
         }
-        assert!(self.start_data_offset as usize == self.byte_count - 4);
+        assert!(start_data_offset as usize == self.byte_count - 4);
+        self.header = Header {
+            start_data_offset,
+            header_size,
+            variant_num,
+            variant_count: 0,
+            sample_num,
+            header_flags,
+        };
         Ok(())
     }
 
@@ -129,7 +145,7 @@ impl<T: Read> BgenSteam<T> {
 
     fn read_variant_data(&mut self) -> Result<VariantData> {
         let file_start_position = self.byte_count;
-        let layout_id = self.header_flags.layout_id;
+        let layout_id = self.header.header_flags.layout_id;
         let number_individuals = if layout_id == 1 {
             Some(self.read_u32()?)
         } else {
@@ -171,11 +187,11 @@ impl<T: Read> BgenSteam<T> {
 
     fn read_data_block(&mut self) -> Result<DataBlock> {
         assert_eq!(
-            self.header_flags.layout_id, 2,
+            self.header.header_flags.layout_id, 2,
             "Layouts other than 2 are not yet supported"
         );
         let length_data_block = self.read_u32()?;
-        let compressed_snp_blocks = self.header_flags.compressed_snp_blocks;
+        let compressed_snp_blocks = self.header.header_flags.compressed_snp_blocks;
         let uncompressed_length = if compressed_snp_blocks {
             self.read_u32()?
         } else {
@@ -188,14 +204,13 @@ impl<T: Read> BgenSteam<T> {
         assert_eq!(
             uncompressed_block.len(),
             uncompressed_length as usize,
-            "Uncompressed data length is expected to be the same as uncompressed_length"
+            "Uncompressed data length is expected to be the same as computed uncompressed length"
         );
         Self::build_from_uncompressed_block(uncompressed_block)
     }
 
     fn build_from_uncompressed_block(block: Vec<u8>) -> Result<DataBlock> {
         let mut bytes = block.into_iter();
-
         let number_individuals = u32::from_le_bytes(Self::convert(Box::new(&mut bytes)));
         let number_alleles = u16::from_le_bytes(Self::convert(Box::new(&mut bytes)));
         let minimum_ploidy = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
@@ -211,6 +226,14 @@ impl<T: Read> BgenSteam<T> {
             _ => Err(Report::msg("Phased byte is incorrect")),
         }?;
         let bytes_probability = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let remaining_bytes: Vec<_> = bytes.collect();
+        let iterate_bits = remaining_bytes.view_bits::<Lsb0>();
+        // assert!(phased, "Unphased data not yet supported");
+        let probabilities = iterate_bits
+            .chunks(bytes_probability as usize)
+            .map(|c| Self::convert_u32(c))
+            .collect();
+
         let data_block = DataBlock {
             number_individuals,
             bytes_probability,
@@ -219,10 +242,19 @@ impl<T: Read> BgenSteam<T> {
             ploidy_missingness,
             phased,
             number_alleles,
-            probabilities: Vec::new(),
+            probabilities,
         };
 
         Ok(data_block)
+    }
+
+    fn convert_u32(to_convert: &BitSlice<u8>) -> u32 {
+        to_convert
+            .into_iter()
+            .map(|b| if *b { 1u32 } else { 0u32 })
+            .enumerate()
+            .map(|(i, b)| b * (1 << i))
+            .sum()
     }
 
     fn convert<U: std::fmt::Debug, const N: usize>(
@@ -264,14 +296,14 @@ impl<T: Read> BgenSteam<T> {
         String::from_utf8(str_bytes).map_err(|e| e.into())
     }
 
-    fn read_u16(&mut self) -> Result<u16> {
-        read_into_buffer!(buffer, self, 2);
-        Ok(u16::from_le_bytes(buffer))
-    }
-
     fn read_u32(&mut self) -> Result<u32> {
         read_into_buffer!(buffer, self, 4);
         Ok(u32::from_le_bytes(buffer))
+    }
+
+    fn read_u16(&mut self) -> Result<u16> {
+        read_into_buffer!(buffer, self, 2);
+        Ok(u16::from_le_bytes(buffer))
     }
 
     fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
@@ -296,11 +328,11 @@ impl<T: Read> BgenSteam<T> {
 impl<T: Read> Iterator for BgenSteam<T> {
     type Item = Result<VariantData>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.variant_count >= self.variant_num {
+        if self.header.variant_count >= self.header.variant_num {
             None
         } else {
             while let Ok(var_data) = self.read_variant_data() {
-                self.variant_count += 1;
+                self.header.variant_count += 1;
                 if var_data.filter_with_args(
                     &self.incl_range,
                     &self.incl_rsids,

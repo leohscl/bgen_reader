@@ -6,13 +6,13 @@ use std::io::Cursor;
 #[test]
 fn read_offset() {
     let bgen_stream = create_bgen_and_read();
-    assert_eq!(1728, bgen_stream.start_data_offset);
+    assert_eq!(1728, bgen_stream.header.start_data_offset);
 }
 
 #[test]
 fn read_header_size() {
     let bgen_stream = create_bgen_and_read();
-    assert_eq!(20, bgen_stream.header_size);
+    assert_eq!(20, bgen_stream.header.header_size);
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn read_header_flags() {
         sample_id_present: true,
     };
     let bgen_stream = create_bgen_and_read();
-    assert_eq!(header_flag, bgen_stream.header_flags);
+    assert_eq!(header_flag, bgen_stream.header.header_flags);
 }
 
 fn create_bgen_and_read() -> BgenSteam<Cursor<Vec<u8>>> {
