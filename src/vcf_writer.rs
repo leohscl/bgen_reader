@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use itertools::Itertools;
 use std::fs::File;
 use std::io::Write;
 use vcf::VCFHeader;
@@ -25,7 +26,12 @@ pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>)
         0,
     )?;
     let vec_header_line = [header_line_0, header_line_1, header_line_2, header_line_3].to_vec();
-    let vec_samples = vec![];
+    let vec_samples = bgen_stream
+        .samples
+        .clone()
+        .into_iter()
+        .map(|s| s.bytes().collect())
+        .collect_vec();
     let header = VCFHeader::new(vec_header_line, vec_samples);
     let mut vcf_writer = vcf::VCFWriter::new(writer, &header)?;
     bgen_stream.into_iter().try_for_each(|var_data| {

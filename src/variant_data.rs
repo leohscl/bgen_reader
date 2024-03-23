@@ -1,5 +1,9 @@
+use core::panic;
+use std::fmt::format;
+
 use crate::parser::Range;
 use color_eyre::Result;
+use itertools::Itertools;
 use vcf::{VCFHeader, VCFRecord};
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -25,7 +29,7 @@ pub struct DataBlock {
     pub ploidy_missingness: Vec<u8>,
     pub phased: bool,
     pub bytes_probability: u8,
-    pub probabilities: Vec<u32>,
+    pub probabilities: Vec<Vec<u32>>,
 }
 
 impl VariantData {
@@ -52,7 +56,45 @@ impl VariantData {
             .map(|allele| allele.bytes().chain(std::iter::once(b' ')).collect())
             .collect();
         record.format = vec![b"GT".to_vec(), b"GP".to_vec()];
+        record.genotype = self
+            .data_block
+            .probabilities
+            .clone()
+            .into_iter()
+            .map(|v| vec![Self::geno_to_bytes(&v), Self::geno_to_calls(&v)])
+            .collect();
         Ok(record)
+    }
+
+    fn geno_to_calls(vec_geno: &Vec<u32>) -> Vec<Vec<u8>> {
+        let vec_probas = vec_geno
+            .into_iter()
+            .map(|e| *e as f64 / 65535f64)
+            .collect_vec();
+        let p00 = (1f64 - vec_probas[0]) * (1f64 - vec_probas[1]);
+        let p11 = vec_probas[0] * vec_probas[1];
+        let pm = 1f64 - p00 - p11;
+        [
+            Self::round_to_str(p00).bytes().collect(),
+            Self::round_to_str(pm).bytes().collect(),
+            Self::round_to_str(p11).bytes().collect(),
+        ]
+        .to_vec()
+    }
+
+    fn round_to_str(f: f64) -> String {
+        format!("{:.3}", f)
+    }
+
+    fn geno_to_bytes(vec_geno: &Vec<u32>) -> Vec<Vec<u8>> {
+        vec_geno
+            .into_iter()
+            .map(|g| match g {
+                0 => "0".bytes().collect(),
+                65535 => "1".bytes().collect(),
+                _ => panic!("unhandeled byte"),
+            })
+            .collect()
     }
 
     pub fn filter_with_args(

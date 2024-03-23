@@ -229,10 +229,24 @@ impl<T: Read> BgenSteam<T> {
         let remaining_bytes: Vec<_> = bytes.collect();
         let iterate_bits = remaining_bytes.view_bits::<Lsb0>();
         // assert!(phased, "Unphased data not yet supported");
-        let probabilities = iterate_bits
+        let all_probabilities: Vec<_> = iterate_bits
             .chunks(bytes_probability as usize)
             .map(|c| Self::convert_u32(c))
             .collect();
+
+        let mut probabilities: Vec<Vec<_>> = Vec::new();
+
+        let mut taken = 0;
+        for ploidy in &ploidy_missingness {
+            let until = taken + ploidy;
+            probabilities.push(
+                all_probabilities[taken as usize..until as usize]
+                    .into_iter()
+                    .cloned()
+                    .collect(),
+            );
+            taken = until;
+        }
 
         let data_block = DataBlock {
             number_individuals,
