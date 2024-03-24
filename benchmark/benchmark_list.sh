@@ -14,15 +14,13 @@ if [ ! -f $bgi_rust ]; then
   $generate_bgi_rust
 fi
 
-./bgenix -g $bgen -vcf
+# Benchmarking index file creation
 
-# # Benchmarking index file creation
-#
-# hyperfine -p "rm $bgi" "$generate_bgi"
-# hyperfine -p "rm $bgi_rust" "$generate_bgi_rust"
-#
-# # Benchmarking listing of variants
-#
+hyperfine -p "rm $bgi" "$generate_bgi"
+hyperfine -p "rm $bgi_rust" "$generate_bgi_rust"
+
+# Benchmarking listing of variants
+
 # hyperfine "./bgenix -g $bgen -list"
 # hyperfine "../target/release/bgen_reader -f $bgen list"
-#
+

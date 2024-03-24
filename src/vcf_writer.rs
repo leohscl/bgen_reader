@@ -14,7 +14,7 @@ pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>)
     //
     let header_line_0 = VCFHeaderLine::from_bytes(&line_version, 0)?;
     let header_line_1 = VCFHeaderLine::from_bytes(
-        b"##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Thresholded genotype call\">\n",
+        b"##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Threshholded genotype call\">\n",
         0,
     )?;
     let header_line_2 = VCFHeaderLine::from_bytes(
@@ -43,7 +43,7 @@ fn write_header<T: Write>(writer: T) -> Result<VCFWriter<T>> {
     let line_version = b"##fileformat=VCFv4.2\n".to_vec();
     let header_line_0 = VCFHeaderLine::from_bytes(&line_version, 0)?;
     let header_line_1 = VCFHeaderLine::from_bytes(
-        b"##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Thresholded genotype call\">\n",
+        b"##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Threshholded genotype call\">\n",
         0,
     )?;
     let header_line_2 = VCFHeaderLine::from_bytes(

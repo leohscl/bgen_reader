@@ -12,6 +12,7 @@ Features:
 - [x] incl-rsid
 - [x] excl-range
 - [x] excl-rsid
-- [ ] genotype reading
+- [x] genotype reading
+- [x] vcf
+- [ ] test phased data
 - [ ] file filters
-- [ ] vcf

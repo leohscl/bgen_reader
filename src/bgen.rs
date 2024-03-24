@@ -159,7 +159,6 @@ impl<T: Read> BgenSteam<T> {
         let alleles: Result<Vec<String>> = (0..num_alleles)
             .map(|_| self.read_u32_sized_string())
             .collect();
-        // let read_data_block = false;
         let read_data_block = true;
         let data_block = if read_data_block {
             self.read_data_block()?
@@ -211,24 +210,23 @@ impl<T: Read> BgenSteam<T> {
 
     fn build_from_uncompressed_block(block: Vec<u8>) -> Result<DataBlock> {
         let mut bytes = block.into_iter();
-        let number_individuals = u32::from_le_bytes(Self::convert(Box::new(&mut bytes)));
-        let number_alleles = u16::from_le_bytes(Self::convert(Box::new(&mut bytes)));
-        let minimum_ploidy = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
-        let maximum_ploidy = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let number_individuals = u32::from_le_bytes(Self::convert(&mut bytes));
+        let number_alleles = u16::from_le_bytes(Self::convert(&mut bytes));
+        let minimum_ploidy = u8::from_le_bytes(Self::convert(&mut bytes));
+        let maximum_ploidy = u8::from_le_bytes(Self::convert(&mut bytes));
         let mut ploidy_missingness = Vec::new();
         for _ in 0..number_individuals {
             ploidy_missingness.push(bytes.next().unwrap());
         }
-        let phased_u8 = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let phased_u8 = u8::from_le_bytes(Self::convert(&mut bytes));
         let phased = match phased_u8 {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(Report::msg("Phased byte is incorrect")),
         }?;
-        let bytes_probability = u8::from_le_bytes(Self::convert(Box::new(&mut bytes)));
+        let bytes_probability = u8::from_le_bytes(Self::convert(&mut bytes));
         let remaining_bytes: Vec<_> = bytes.collect();
         let iterate_bits = remaining_bytes.view_bits::<Lsb0>();
-        // assert!(phased, "Unphased data not yet supported");
         let all_probabilities: Vec<_> = iterate_bits
             .chunks(bytes_probability as usize)
             .map(|c| Self::convert_u32(c))
@@ -237,14 +235,16 @@ impl<T: Read> BgenSteam<T> {
         let mut probabilities: Vec<Vec<_>> = Vec::new();
 
         let mut taken = 0;
-        for ploidy in &ploidy_missingness {
+        for ploidy_miss in &ploidy_missingness {
+            let missingness = ploidy_miss & (1 << 7);
+            if missingness == 1 {
+                continue;
+            }
+            dbg!(ploidy_miss);
+            let ploidy = ploidy_miss & ((1 << 7) - 1);
+            assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
             let until = taken + ploidy;
-            probabilities.push(
-                all_probabilities[taken as usize..until as usize]
-                    .into_iter()
-                    .cloned()
-                    .collect(),
-            );
+            probabilities.push(all_probabilities[taken as usize..until as usize].to_vec());
             taken = until;
         }
 
@@ -271,9 +271,7 @@ impl<T: Read> BgenSteam<T> {
             .sum()
     }
 
-    fn convert<U: std::fmt::Debug, const N: usize>(
-        block: Box<&mut dyn Iterator<Item = U>>,
-    ) -> [U; N] {
+    fn convert<U: std::fmt::Debug, const N: usize>(block: &mut dyn Iterator<Item = U>) -> [U; N] {
         block
             .take(N)
             .collect::<Vec<U>>()

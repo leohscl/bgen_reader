@@ -1,5 +1,4 @@
 use core::panic;
-use std::fmt::format;
 
 use crate::parser::Range;
 use color_eyre::Result;
@@ -56,23 +55,70 @@ impl VariantData {
             .map(|allele| allele.bytes().chain(std::iter::once(b' ')).collect())
             .collect();
         record.format = vec![b"GT".to_vec(), b"GP".to_vec()];
-        record.genotype = self
-            .data_block
-            .probabilities
-            .clone()
-            .into_iter()
-            .map(|v| vec![Self::geno_to_bytes(&v), Self::geno_to_calls(&v)])
-            .collect();
+        record.genotype = if self.data_block.phased {
+            self.data_block
+                .probabilities
+                .clone()
+                .into_iter()
+                .map(|v| {
+                    vec![
+                        Self::geno_to_bytes_phased(&v),
+                        Self::geno_to_calls_phased(&v),
+                    ]
+                })
+                .collect()
+        } else {
+            self.data_block
+                .probabilities
+                .clone()
+                .into_iter()
+                .map(|v| {
+                    let vec_calls_unphased = Self::calls_probabilities_unphased(&v);
+                    let vec_geno_unphased = Self::calls_to_geno_unphased(&vec_calls_unphased);
+                    let vec_calls_fmt = vec_calls_unphased
+                        .into_iter()
+                        .map(|f| Self::round_to_str(f).bytes().collect())
+                        .collect();
+                    vec![vec_geno_unphased, vec_calls_fmt]
+                })
+                .collect()
+        };
         Ok(record)
     }
 
-    fn geno_to_calls(vec_geno: &Vec<u32>) -> Vec<Vec<u8>> {
-        let vec_probas = vec_geno
-            .into_iter()
-            .map(|e| *e as f64 / 65535f64)
-            .collect_vec();
-        let p00 = (1f64 - vec_probas[0]) * (1f64 - vec_probas[1]);
-        let p11 = vec_probas[0] * vec_probas[1];
+    fn geno_to_bytes_phased(vec_geno: &[u32]) -> Vec<Vec<u8>> {
+        vec_geno
+            .iter()
+            .map(|g| match g {
+                0 => "1".bytes().collect(),
+                65535 => "0".bytes().collect(),
+                _ => panic!("unhandeled byte"),
+            })
+            .collect()
+    }
+
+    fn calls_to_geno_unphased(vec_calls: &[f64]) -> Vec<Vec<u8>> {
+        let ph1 = (vec_calls[2]).round();
+        let ph2 = (vec_calls[2] + vec_calls[1]).round();
+        [
+            ph1.to_string().bytes().collect(),
+            ph2.to_string().bytes().collect(),
+        ]
+        .to_vec()
+    }
+
+    fn calls_probabilities_unphased(vec_geno: &[u32]) -> Vec<f64> {
+        let vec_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64).collect_vec();
+        let p00 = vec_probas[0];
+        let p10 = vec_probas[1];
+        let p11 = 1f64 - p10 - p00;
+        [p00, p10, p11].to_vec()
+    }
+
+    fn geno_to_calls_phased(vec_geno: &[u32]) -> Vec<Vec<u8>> {
+        let vec_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64).collect_vec();
+        let p00 = vec_probas[0] * vec_probas[1];
+        let p11 = (1f64 - vec_probas[0]) * (1f64 - vec_probas[1]);
         let pm = 1f64 - p00 - p11;
         [
             Self::round_to_str(p00).bytes().collect(),
@@ -83,18 +129,11 @@ impl VariantData {
     }
 
     fn round_to_str(f: f64) -> String {
-        format!("{:.3}", f)
-    }
-
-    fn geno_to_bytes(vec_geno: &Vec<u32>) -> Vec<Vec<u8>> {
-        vec_geno
-            .into_iter()
-            .map(|g| match g {
-                0 => "0".bytes().collect(),
-                65535 => "1".bytes().collect(),
-                _ => panic!("unhandeled byte"),
-            })
-            .collect()
+        if f.round() == f {
+            f.to_string()
+        } else {
+            format!("{:.3}", f)
+        }
     }
 
     pub fn filter_with_args(
