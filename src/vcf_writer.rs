@@ -1,6 +1,8 @@
 use color_eyre::Result;
 use itertools::Itertools;
+use rayon::prelude::*;
 use std::fs::File;
+use std::io::BufWriter;
 use std::io::Write;
 use vcf::VCFHeader;
 use vcf::VCFHeaderLine;
@@ -9,7 +11,9 @@ use vcf::VCFWriter;
 use crate::bgen::BgenSteam;
 
 pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>) -> Result<()> {
-    let writer = File::create(output_path)?;
+    let file = File::create(output_path)?;
+    let reader = BufWriter::new(file);
+
     let line_version = b"##fileformat=VCFv4.2\n".to_vec();
     //
     let header_line_0 = VCFHeaderLine::from_bytes(&line_version, 0)?;
@@ -33,10 +37,22 @@ pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>)
         .map(|s| s.bytes().collect())
         .collect_vec();
     let header = VCFHeader::new(vec_header_line, vec_samples);
-    let mut vcf_writer = vcf::VCFWriter::new(writer, &header)?;
-    bgen_stream.into_iter().try_for_each(|var_data| {
-        Ok(vcf_writer.write_record(&var_data?.to_record(header.clone())?)?)
-    })
+    let mut vcf_writer = vcf::VCFWriter::new(reader, &header)?;
+    bgen_stream
+        .into_iter()
+        .chunks(1000)
+        .into_iter()
+        .try_for_each(|chunk| {
+            let variants = chunk.into_iter().collect_vec();
+            let vec_rec: Vec<_> = variants
+                .par_iter()
+                .map(|var_data| var_data.as_ref().unwrap().to_record(header.clone()))
+                .collect();
+
+            vec_rec
+                .into_iter()
+                .try_for_each(|rec| Ok(vcf_writer.write_record(&rec?)?))
+        })
 }
 
 fn write_header<T: Write>(writer: T) -> Result<VCFWriter<T>> {

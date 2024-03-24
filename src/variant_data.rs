@@ -1,11 +1,10 @@
-use core::panic;
-
 use crate::parser::Range;
 use color_eyre::Result;
+use core::panic;
 use itertools::Itertools;
 use vcf::{VCFHeader, VCFRecord};
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct VariantData {
     pub number_individuals: Option<u32>,
     pub variants_id: String,
@@ -19,7 +18,7 @@ pub struct VariantData {
     pub data_block: DataBlock,
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct DataBlock {
     pub number_individuals: u32,
     pub number_alleles: u16,
@@ -58,22 +57,15 @@ impl VariantData {
         record.genotype = if self.data_block.phased {
             self.data_block
                 .probabilities
-                .clone()
-                .into_iter()
-                .map(|v| {
-                    vec![
-                        Self::geno_to_bytes_phased(&v),
-                        Self::geno_to_calls_phased(&v),
-                    ]
-                })
+                .iter()
+                .map(|v| vec![Self::geno_to_bytes_phased(v), Self::geno_to_calls_phased(v)])
                 .collect()
         } else {
             self.data_block
                 .probabilities
-                .clone()
-                .into_iter()
+                .iter()
                 .map(|v| {
-                    let vec_calls_unphased = Self::calls_probabilities_unphased(&v);
+                    let vec_calls_unphased = Self::calls_probabilities_unphased(v);
                     let vec_geno_unphased = Self::calls_to_geno_unphased(&vec_calls_unphased);
                     let vec_calls_fmt = vec_calls_unphased
                         .into_iter()
@@ -130,18 +122,18 @@ impl VariantData {
 
     fn round_to_str(f: f64) -> String {
         if f.round() == f {
-            f.to_string()
+            f.to_string().into()
         } else {
-            format!("{:.3}", f)
+            format!("{:.3}", f).into()
         }
     }
 
     pub fn filter_with_args(
         &self,
         incl_ranges: &[Range],
-        incl_rsids: &[String],
+        incl_rsids: &[std::string::String],
         excl_ranges: &[Range],
-        excl_rsid: &[String],
+        excl_rsid: &[std::string::String],
     ) -> bool {
         // edge case: no inclusion filters, all variants are included if not excluded
         if incl_ranges.is_empty() && incl_rsids.is_empty() {
@@ -150,7 +142,7 @@ impl VariantData {
         self.in_filters(incl_ranges, incl_rsids) && !self.in_filters(excl_ranges, excl_rsid)
     }
 
-    fn in_filters(&self, ranges: &[Range], rsids: &[String]) -> bool {
+    fn in_filters(&self, ranges: &[Range], rsids: &[std::string::String]) -> bool {
         let in_ranges = ranges.iter().any(|r| self.in_range(r));
         let in_rsids = rsids.iter().any(|r| &self.rsid == r);
         in_rsids || in_ranges

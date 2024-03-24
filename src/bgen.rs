@@ -16,6 +16,7 @@ use std::time::SystemTime;
 
 pub struct BgenSteam<T> {
     stream: BufReader<T>,
+    read_data_block: bool,
     pub header: Header,
     pub metadata: Option<MetadataBgi>,
     pub byte_count: usize,
@@ -59,7 +60,12 @@ macro_rules! read_into_vector {
 }
 
 impl<T: Read> BgenSteam<T> {
-    pub fn new(stream: BufReader<T>, metadata: Option<MetadataBgi>, samples: Vec<String>) -> Self {
+    pub fn new(
+        stream: BufReader<T>,
+        metadata: Option<MetadataBgi>,
+        samples: Vec<String>,
+        read_data_block: bool,
+    ) -> Self {
         let header = Header {
             start_data_offset: 0,
             header_size: 0,
@@ -70,6 +76,7 @@ impl<T: Read> BgenSteam<T> {
         };
         BgenSteam {
             stream,
+            read_data_block,
             header,
             byte_count: 0,
             metadata,
@@ -159,8 +166,7 @@ impl<T: Read> BgenSteam<T> {
         let alleles: Result<Vec<String>> = (0..num_alleles)
             .map(|_| self.read_u32_sized_string())
             .collect();
-        let read_data_block = true;
-        let data_block = if read_data_block {
+        let data_block = if self.read_data_block {
             self.read_data_block()?
         } else {
             let bytes_until_next_data_block = self.read_u32()?;
@@ -240,7 +246,6 @@ impl<T: Read> BgenSteam<T> {
             if missingness == 1 {
                 continue;
             }
-            dbg!(ploidy_miss);
             let ploidy = ploidy_miss & ((1 << 7) - 1);
             assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
             let until = taken + ploidy;
@@ -360,7 +365,7 @@ impl<T: Read> Iterator for BgenSteam<T> {
 }
 
 impl BgenSteam<File> {
-    pub fn from_path(path_str: &str, use_sample_file: bool) -> Result<Self> {
+    pub fn from_path(path_str: &str, use_sample_file: bool, read_data_block: bool) -> Result<Self> {
         // Build metadata for file
         let path = Path::new(path_str);
         let filename = path.file_name().ok_or(Report::msg(format!(
@@ -402,15 +407,20 @@ impl BgenSteam<File> {
             first_1000_bytes,
             last_write_time,
         };
-        Ok(BgenSteam::new(stream, Some(metadata), samples))
+        Ok(BgenSteam::new(
+            stream,
+            Some(metadata),
+            samples,
+            read_data_block,
+        ))
     }
 }
 
 impl BgenSteam<Cursor<Vec<u8>>> {
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+    pub fn from_bytes(bytes: Vec<u8>, read_data_block: bool) -> Result<Self> {
         let stream = BufReader::new(Cursor::new(bytes));
         let metadata = None;
-        Ok(BgenSteam::new(stream, metadata, vec![]))
+        Ok(BgenSteam::new(stream, metadata, vec![], read_data_block))
     }
 }
 

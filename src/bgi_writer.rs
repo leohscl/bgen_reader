@@ -38,6 +38,16 @@ impl TableCreator {
     }
 
     pub fn init(&self, meta: &MetadataBgi) -> Result<()> {
+        // self.conn.execute("PRAGMA journal_mode = OFF", ())?;
+        self.conn
+            .execute_batch(
+                "PRAGMA journal_mode = OFF;
+                 PRAGMA synchronous = 0;
+                 PRAGMA cache_size = 1000000;
+                 PRAGMA locking_mode = EXCLUSIVE;
+                 PRAGMA temp_store = MEMORY;",
+            )
+            .expect("PRAGMA");
         self.conn.execute(VARIANT_CREATION_STRING, ())?;
         self.conn.execute(METADATA_CREATION_STRING, ())?;
         self.conn.execute(
@@ -48,12 +58,12 @@ impl TableCreator {
     }
 
     pub fn store(&self, data: impl Iterator<Item = Result<VariantData>>) -> Result<()> {
-        data.chunks(10000)
+        let size = 10000;
+        data.chunks(size)
             .into_iter()
             .map(|chunk| {
                 let chunk_vec: Vec<VariantData> =
                     chunk.into_iter().collect::<Result<Vec<VariantData>>>()?;
-                let size = chunk_vec.len();
                 let statement = create_statement_batch_params(size);
                 let mut cached_statement = self
                     .conn

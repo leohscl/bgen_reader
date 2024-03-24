@@ -11,6 +11,9 @@ clap = { version = "4.5.1", features = ["derive"] }
 color-eyre = "0.6.2"
 flate2 = "1.0.28"
 itertools = "0.12.1"
-num = "0.4.1"
+rayon = "1.10.0"
 rusqlite = "0.31.0"
 vcf = "0.6.1"
+
+[profile.release]
+debug = true

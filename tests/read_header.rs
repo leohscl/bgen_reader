@@ -28,7 +28,7 @@ fn read_header_flags() {
 
 fn create_bgen_and_read() -> BgenSteam<Cursor<Vec<u8>>> {
     let bgen_bytes = include_bytes!("../data_test/samp_100_var_100.bgen");
-    let mut bgen_stream = BgenSteam::from_bytes(bgen_bytes.to_vec()).unwrap();
+    let mut bgen_stream = BgenSteam::from_bytes(bgen_bytes.to_vec(), true).unwrap();
     bgen_stream.read_offset_and_header().unwrap();
     bgen_stream
 }
