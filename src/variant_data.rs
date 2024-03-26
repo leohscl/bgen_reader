@@ -65,11 +65,11 @@ impl VariantData {
                 .probabilities
                 .iter()
                 .map(|v| {
-                    let vec_calls_unphased = Self::calls_probabilities_unphased(v);
+                    let vec_calls_unphased = Self::calls_probabilities_unphased_v21(v);
                     let vec_geno_unphased = Self::calls_to_geno_unphased(&vec_calls_unphased);
                     let vec_calls_fmt = vec_calls_unphased
                         .into_iter()
-                        .map(|f| Self::round_to_str(f).bytes().collect())
+                        .map(Self::round_to_str)
                         .collect();
                     vec![vec_geno_unphased, vec_calls_fmt]
                 })
@@ -90,13 +90,9 @@ impl VariantData {
     }
 
     fn calls_to_geno_unphased(vec_calls: &[f64]) -> Vec<Vec<u8>> {
-        let ph1 = (vec_calls[2]).round();
-        let ph2 = (vec_calls[2] + vec_calls[1]).round();
-        [
-            ph1.to_string().bytes().collect(),
-            ph2.to_string().bytes().collect(),
-        ]
-        .to_vec()
+        let ph1 = f64_round_tobytes(vec_calls[2]);
+        let ph2 = f64_round_tobytes(vec_calls[2] + vec_calls[1]);
+        [ph1, ph2].to_vec()
     }
 
     fn calls_probabilities_unphased(vec_geno: &[u32]) -> Vec<f64> {
@@ -107,25 +103,34 @@ impl VariantData {
         [p00, p10, p11].to_vec()
     }
 
+    fn calls_probabilities_unphased_v2(vec_geno: &[u32]) -> Vec<f64> {
+        let mut vec_probas = Vec::with_capacity(3);
+        let mut iter_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64);
+        let p00 = iter_probas.next().unwrap();
+        let p10 = iter_probas.next().unwrap();
+        let p11 = 1f64 - p10 - p00;
+        vec_probas.push(p00);
+        vec_probas.push(p10);
+        vec_probas.push(p11);
+        vec_probas
+    }
+
     fn geno_to_calls_phased(vec_geno: &[u32]) -> Vec<Vec<u8>> {
         let vec_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64).collect_vec();
         let p00 = vec_probas[0] * vec_probas[1];
         let p11 = (1f64 - vec_probas[0]) * (1f64 - vec_probas[1]);
         let pm = 1f64 - p00 - p11;
         [
-            Self::round_to_str(p00).bytes().collect(),
-            Self::round_to_str(pm).bytes().collect(),
-            Self::round_to_str(p11).bytes().collect(),
+            Self::round_to_str(p00),
+            Self::round_to_str(pm),
+            Self::round_to_str(p11),
         ]
         .to_vec()
     }
 
-    fn round_to_str(f: f64) -> String {
-        if f.round() == f {
-            f.to_string().into()
-        } else {
-            format!("{:.3}", f).into()
-        }
+    fn round_to_str(f: f64) -> Vec<u8> {
+        let mut buff = ryu::Buffer::new();
+        buff.format(f).bytes().collect()
     }
 
     pub fn filter_with_args(
@@ -150,5 +155,14 @@ impl VariantData {
 
     fn in_range(&self, range: &Range) -> bool {
         range.chr == self.chr && range.start <= self.pos && self.pos <= range.end
+    }
+}
+
+fn f64_round_tobytes(f: f64) -> Vec<u8> {
+    match f {
+        x if (0f64..=0.5f64).contains(&x) => "0".bytes().collect(),
+        x if (0.5f64..=1.5f64).contains(&x) => "1".bytes().collect(),
+        x if (1.5f64..=2f64).contains(&x) => "2".bytes().collect(),
+        _ => panic!("float not between 0 and 2 !"),
     }
 }

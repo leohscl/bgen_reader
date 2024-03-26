@@ -1,6 +1,5 @@
 bgen="../data_test/samp_100_var_100000.bgen"
-# bgen="../data_test/samp_100_var_100.bgen"
-# bgen="../data_test/samp_101_var_1000001_pfile.bgen"
+# bgen="../HG_files/1000G_100k.bgen"
 bgi="$bgen.bgi"
 bgi_rust="$bgen.bgi_rust"
 
@@ -18,13 +17,13 @@ fi
 
 # hyperfine -p "rm $bgi" "$generate_bgi"
 # hyperfine -p "rm $bgi_rust" "$generate_bgi_rust"
-
-# Benchmarking listing of variants
-
+#
+# # Benchmarking listing of variants
+#
 # hyperfine "./bgenix -g $bgen -list"
 # hyperfine "../target/release/bgen_reader -f $bgen list"
-
-# Benchmarking vcf file
-hyperfine "./bgenix -g $bgen -vcf > bgenix.vcf"
+#
+# # Benchmarking vcf file
+# hyperfine "./bgenix -g $bgen -vcf > bgenix.vcf"
 hyperfine "../target/release/bgen_reader -f $bgen vcf"
 

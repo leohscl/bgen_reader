@@ -205,7 +205,8 @@ impl<T: Read> BgenSteam<T> {
         // TODO(lhenches): handle other cases
         assert!(compressed_snp_blocks);
         let compressed_block = self.read_vector_length((length_data_block - 4) as usize)?;
-        let uncompressed_block = Self::decompress_block(compressed_block)?;
+        let uncompressed_block =
+            Self::decompress_block(compressed_block, uncompressed_length as usize)?;
         assert_eq!(
             uncompressed_block.len(),
             uncompressed_length as usize,
@@ -240,16 +241,16 @@ impl<T: Read> BgenSteam<T> {
 
         let mut probabilities: Vec<Vec<_>> = Vec::new();
 
-        let mut taken = 0;
+        let mut taken: usize = 0;
         for ploidy_miss in &ploidy_missingness {
             let missingness = ploidy_miss & (1 << 7);
             if missingness == 1 {
                 continue;
             }
-            let ploidy = ploidy_miss & ((1 << 7) - 1);
+            let ploidy = (ploidy_miss & ((1 << 7) - 1)) as usize;
             assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
             let until = taken + ploidy;
-            probabilities.push(all_probabilities[taken as usize..until as usize].to_vec());
+            probabilities.push(all_probabilities[taken..until].to_vec());
             taken = until;
         }
 
@@ -284,11 +285,11 @@ impl<T: Read> BgenSteam<T> {
             .expect("Conversion failed. Data is most likely corrupted")
     }
 
-    fn decompress_block(block: Vec<u8>) -> Result<Vec<u8>> {
+    fn decompress_block(block: Vec<u8>, length: usize) -> Result<Vec<u8>> {
         let mut decoder = ZlibDecoder::new(Cursor::new(block));
-        let mut decoded = Vec::new();
+        let mut decoded = vec![0; length];
         decoder
-            .read_to_end(&mut decoded)
+            .read_exact(&mut decoded)
             .map_err(|_| Report::msg("Error in decompression"))?;
         Ok(decoded)
     }
