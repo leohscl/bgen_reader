@@ -70,11 +70,26 @@ impl VariantData {
             let ploidy = (ploidy_miss & ((1 << 7) - 1)) as usize;
             assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
             let until = taken + ploidy;
-            let vec_calls_unphased =
-                Self::calls_probabilities_unphased_v2(&self.data_block.probabilities[taken..until]);
-            let vec_geno_unphased = Self::calls_to_geno_unphased_raw(&vec_calls_unphased);
+            let (vec_calls, vec_geno) = if self.data_block.phased {
+                let vec_geno_phased_f = self.data_block.probabilities[taken..until]
+                    .iter()
+                    .map(|&n| n as f64 / 65535f64)
+                    .collect_vec();
+                let vec_calls = Self::geno_to_calls(&vec_geno_phased_f);
+                let vec_geno = vec_geno_phased_f
+                    .iter()
+                    .map(|&p_g| f64_round(p_g))
+                    .collect_vec();
+                (vec_calls, vec_geno)
+            } else {
+                let vec_calls_unphased = Self::calls_probabilities_unphased(
+                    &self.data_block.probabilities[taken..until],
+                );
+                let vec_geno_unphased = Self::calls_to_geno_unphased_raw(&vec_calls_unphased);
+                (vec_calls_unphased, vec_geno_unphased)
+            };
             itertools::Itertools::intersperse(
-                vec_geno_unphased.into_iter().map(|g| match g {
+                vec_geno.into_iter().map(|g| match g {
                     0 => "0",
                     1 => "1",
                     2 => "2",
@@ -86,9 +101,9 @@ impl VariantData {
             writer.write_all(b":")?;
 
             let mut buffer = ryu::Buffer::new();
-            for i in 0..vec_calls_unphased.len() {
-                writer.write_all(buffer.format(vec_calls_unphased[i]).as_bytes())?;
-                if i != vec_calls_unphased.len() - 1 {
+            for i in 0..vec_calls.len() {
+                writer.write_all(buffer.format(vec_calls[i]).as_bytes())?;
+                if i != vec_calls.len() - 1 {
                     writer.write_all(",".as_bytes())?;
                 }
             }
@@ -99,64 +114,22 @@ impl VariantData {
         Ok(())
     }
 
-    // pub fn to_record(&self, header: VCFHeader) -> Result<VCFRecord> {
-    //     let mut record = VCFRecord::new(header);
-    //     record.chromosome = self.chr.bytes().collect();
-    //     record.position = self.pos as u64;
-    //     record.id = vec![self.rsid.bytes().collect()];
-    //     record.reference = self.alleles[0].bytes().collect();
-    //     record.alternative = self.alleles[1..]
-    //         .iter()
-    //         .map(|allele| allele.bytes().chain(std::iter::once(b' ')).collect())
-    //         .collect();
-    //     record.format = vec![b"GT".to_vec(), b"GP".to_vec()];
-    //     record.genotype = if self.data_block.phased {
-    //         self.data_block
-    //             .probabilities
-    //             .iter()
-    //             .map(|v| vec![Self::geno_to_bytes_phased(v), Self::geno_to_calls_phased(v)])
-    //             .collect()
-    //     } else {
-    //         self.data_block
-    //             .probabilities
-    //             .iter()
-    //             .map(|v| {
-    //                 let vec_calls_unphased = Self::calls_probabilities_unphased_v2(v);
-    //                 let vec_geno_unphased = Self::calls_to_geno_unphased(&vec_calls_unphased);
-    //                 let vec_calls_fmt = vec_calls_unphased
-    //                     .into_iter()
-    //                     .map(Self::round_to_str)
-    //                     .collect();
-    //                 vec![vec_geno_unphased, vec_calls_fmt]
-    //             })
-    //             .collect()
-    //     };
-    //     Ok(record)
-    // }
-
-    fn geno_to_bytes_phased(vec_geno: &[u32]) -> Vec<Vec<u8>> {
-        vec_geno
-            .iter()
-            .map(|g| match g {
-                0 => "1".bytes().collect(),
-                65535 => "0".bytes().collect(),
-                _ => panic!("unhandeled byte"),
-            })
-            .collect()
-    }
     fn calls_to_geno_unphased_raw(vec_calls: &[f64]) -> Vec<u8> {
         let ph1 = f64_round(vec_calls[2]);
         let ph2 = f64_round(vec_calls[2] + vec_calls[1]);
         [ph1, ph2].to_vec()
     }
 
-    fn calls_to_geno_unphased(vec_calls: &[f64]) -> Vec<Vec<u8>> {
-        let ph1 = f64_round_tobytes(vec_calls[2]);
-        let ph2 = f64_round_tobytes(vec_calls[2] + vec_calls[1]);
-        [ph1, ph2].to_vec()
+    fn geno_to_calls(slice_geno: &[f64]) -> Vec<f64> {
+        let mut vec_ret = Vec::with_capacity(3);
+        let p00 = slice_geno[0] * slice_geno[1];
+        let p11 = (1f64 - slice_geno[0]) * (1f64 - slice_geno[1]);
+        let p10 = 1f64 - p00 - p11;
+        vec_ret.extend([p00, p10, p11]);
+        vec_ret
     }
 
-    fn calls_probabilities_unphased_v2(vec_geno: &[u32]) -> Vec<f64> {
+    fn calls_probabilities_unphased(vec_geno: &[u32]) -> Vec<f64> {
         let mut vec_probas = Vec::with_capacity(3);
         let mut iter_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64);
         let p00 = iter_probas.next().unwrap();
@@ -166,24 +139,6 @@ impl VariantData {
         vec_probas.push(p10);
         vec_probas.push(p11);
         vec_probas
-    }
-
-    fn geno_to_calls_phased(vec_geno: &[u32]) -> Vec<Vec<u8>> {
-        let vec_probas = vec_geno.iter().map(|e| *e as f64 / 65535f64).collect_vec();
-        let p00 = vec_probas[0] * vec_probas[1];
-        let p11 = (1f64 - vec_probas[0]) * (1f64 - vec_probas[1]);
-        let pm = 1f64 - p00 - p11;
-        [
-            Self::round_to_str(p00),
-            Self::round_to_str(pm),
-            Self::round_to_str(p11),
-        ]
-        .to_vec()
-    }
-
-    fn round_to_str(f: f64) -> Vec<u8> {
-        let mut buff = ryu::Buffer::new();
-        buff.format(f).bytes().collect()
     }
 
     pub fn filter_with_args(
@@ -216,15 +171,6 @@ fn f64_round(f: f64) -> u8 {
         x if (0f64..=0.5f64).contains(&x) => 0,
         x if (0.5f64..=1.5f64).contains(&x) => 1,
         x if (1.5f64..=2f64).contains(&x) => 2,
-        _ => panic!("float not between 0 and 2 !"),
-    }
-}
-
-fn f64_round_tobytes(f: f64) -> Vec<u8> {
-    match f {
-        x if (0f64..=0.5f64).contains(&x) => "0".bytes().collect(),
-        x if (0.5f64..=1.5f64).contains(&x) => "1".bytes().collect(),
-        x if (1.5f64..=2f64).contains(&x) => "2".bytes().collect(),
         _ => panic!("float not between 0 and 2 !"),
     }
 }

@@ -7,6 +7,7 @@ use color_eyre::Result;
 use flate2::bufread::ZlibDecoder;
 use itertools::Itertools;
 use std::fs::File;
+use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Cursor;
@@ -233,26 +234,20 @@ impl<T: Read> BgenSteam<T> {
         }?;
         let bytes_probability = u8::from_le_bytes(Self::convert(&mut bytes));
         let remaining_bytes: Vec<_> = bytes.collect();
-        let iterate_bits = remaining_bytes.view_bits::<Lsb0>();
-        let all_probabilities: Vec<_> = iterate_bits
-            .chunks(bytes_probability as usize)
-            .map(|c| Self::convert_u32(c))
-            .collect();
-
-        // let mut probabilities: Vec<> = Vec::new();
-
-        // let mut taken: usize = 0;
-        // for ploidy_miss in &ploidy_missingness {
-        //     let missingness = ploidy_miss & (1 << 7);
-        //     if missingness == 1 {
-        //         continue;
-        //     }
-        //     let ploidy = (ploidy_miss & ((1 << 7) - 1)) as usize;
-        //     assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
-        //     let until = taken + ploidy;
-        //     probabilities.push(all_probabilities[taken..until].to_vec());
-        //     taken = until;
-        // }
+        let all_probabilities: Vec<_> = if bytes_probability % 8 == 0 {
+            let chunk_size = (bytes_probability / 8) as usize;
+            remaining_bytes
+                .chunks(chunk_size)
+                .map(|c| Self::convert_u8_chunk(c))
+                .collect()
+        } else {
+            println!("Warning: the probability stored are not a multiple of 8");
+            let iterate_bits = remaining_bytes.view_bits::<Lsb0>();
+            iterate_bits
+                .chunks(bytes_probability as usize)
+                .map(|c| Self::convert_u32(c))
+                .collect()
+        };
 
         let data_block = DataBlock {
             number_individuals,
@@ -266,6 +261,14 @@ impl<T: Read> BgenSteam<T> {
         };
 
         Ok(data_block)
+    }
+
+    fn convert_u8_chunk(to_convert: &[u8]) -> u32 {
+        to_convert
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| b as u32 * (1 << (i * 8)))
+            .sum()
     }
 
     fn convert_u32(to_convert: &BitSlice<u8>) -> u32 {
@@ -325,11 +328,10 @@ impl<T: Read> BgenSteam<T> {
     }
 
     fn skip_bytes(&mut self, num_bytes: usize) -> Result<()> {
-        if num_bytes > 0 {
-            let mut vec = vec![0; num_bytes];
-            self.add_counter(num_bytes);
-            self.read_exact(vec.as_mut_slice())?;
-        }
+        io::copy(
+            &mut std::io::Read::take(std::io::Read::by_ref(self), num_bytes.try_into()?),
+            &mut io::sink(),
+        )?;
         Ok(())
     }
 
