@@ -221,7 +221,7 @@ impl<T: Read> BgenSteam<T> {
         let number_alleles = u16::from_le_bytes(Self::convert(&mut bytes));
         let minimum_ploidy = u8::from_le_bytes(Self::convert(&mut bytes));
         let maximum_ploidy = u8::from_le_bytes(Self::convert(&mut bytes));
-        let mut ploidy_missingness = Vec::new();
+        let mut ploidy_missingness = Vec::with_capacity(number_individuals as usize);
         for _ in 0..number_individuals {
             ploidy_missingness.push(bytes.next().unwrap());
         }
@@ -239,20 +239,20 @@ impl<T: Read> BgenSteam<T> {
             .map(|c| Self::convert_u32(c))
             .collect();
 
-        let mut probabilities: Vec<Vec<_>> = Vec::new();
+        // let mut probabilities: Vec<> = Vec::new();
 
-        let mut taken: usize = 0;
-        for ploidy_miss in &ploidy_missingness {
-            let missingness = ploidy_miss & (1 << 7);
-            if missingness == 1 {
-                continue;
-            }
-            let ploidy = (ploidy_miss & ((1 << 7) - 1)) as usize;
-            assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
-            let until = taken + ploidy;
-            probabilities.push(all_probabilities[taken..until].to_vec());
-            taken = until;
-        }
+        // let mut taken: usize = 0;
+        // for ploidy_miss in &ploidy_missingness {
+        //     let missingness = ploidy_miss & (1 << 7);
+        //     if missingness == 1 {
+        //         continue;
+        //     }
+        //     let ploidy = (ploidy_miss & ((1 << 7) - 1)) as usize;
+        //     assert_eq!(ploidy, 2, "ploidy other than 2 not yet supported");
+        //     let until = taken + ploidy;
+        //     probabilities.push(all_probabilities[taken..until].to_vec());
+        //     taken = until;
+        // }
 
         let data_block = DataBlock {
             number_individuals,
@@ -262,7 +262,7 @@ impl<T: Read> BgenSteam<T> {
             ploidy_missingness,
             phased,
             number_alleles,
-            probabilities,
+            probabilities: all_probabilities,
         };
 
         Ok(data_block)
