@@ -1,3 +1,5 @@
+use std::io::BufWriter;
+
 use bgen_reader::bgen::BgenSteam;
 use bgen_reader::bgi_writer::TableCreator;
 use bgen_reader::parser::{Cli, Command};
@@ -21,11 +23,8 @@ fn main() -> Result<()> {
             let mut bgen_stream = BgenSteam::from_path(&cli.filename, cli.use_sample_file, false)?;
             bgen_stream.read_offset_and_header()?;
             bgen_stream.collect_filters(list_args);
-            let variant_data_str = bgen_stream
-                .map(|variant_data| Ok(variant_data?.bgenix_print()))
-                .collect::<Result<Vec<String>>>()?
-                .join("\n");
-            println!("{}", variant_data_str);
+            let mut writer = BufWriter::new(std::io::stdout());
+            bgen_stream.try_for_each(|variant_data| variant_data?.bgenix_print(&mut writer))?
         }
         Command::Vcf(list_args) => {
             let mut bgen_stream = BgenSteam::from_path(&cli.filename, cli.use_sample_file, true)?;

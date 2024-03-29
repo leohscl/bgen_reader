@@ -2,6 +2,7 @@ use crate::parser::Range;
 use color_eyre::Result;
 use core::panic;
 use itertools::Itertools;
+use numtoa::NumToA;
 use std::io::Write;
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
@@ -31,16 +32,24 @@ pub struct DataBlock {
 }
 
 impl VariantData {
-    pub fn bgenix_print(&self) -> String {
-        [
-            self.variants_id.to_string(),
-            self.rsid.to_string(),
-            self.pos.to_string(),
-            self.number_alleles.to_string(),
-            self.alleles[0].to_string(),
-            self.alleles[1].to_string(),
-        ]
-        .join("\t")
+    pub fn bgenix_print(&self, mut writer: impl Write) -> Result<()> {
+        let mut buffer = [0u8; 20];
+        let separator = "\t".as_bytes();
+        writer.write_all(self.variants_id.as_bytes())?;
+        writer.write_all(separator)?;
+        writer.write_all(self.rsid.as_bytes())?;
+        writer.write_all(separator)?;
+        let b_pos = self.pos.numtoa(10, &mut buffer);
+        writer.write_all(b_pos)?;
+        writer.write_all(separator)?;
+        let b_number_alleles = self.number_alleles.numtoa(10, &mut buffer);
+        writer.write_all(b_number_alleles)?;
+        writer.write_all(separator)?;
+        writer.write_all(self.alleles[0].as_bytes())?;
+        writer.write_all(separator)?;
+        writer.write_all(self.alleles[1].as_bytes())?;
+        writer.write_all(b"\n")?;
+        Ok(())
     }
 
     pub fn write_vcf_line(&self, mut writer: impl Write) -> Result<()> {
