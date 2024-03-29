@@ -335,13 +335,14 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
-    pub fn collect_filters(&mut self, list_args: ListArgs) {
+    pub fn collect_filters(&mut self, list_args: ListArgs) -> Result<()> {
         let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
-            list_args.get_vector_incl_and_excl();
+            list_args.get_vector_incl_and_excl()?;
         self.incl_range = vec_incl_range;
         self.incl_rsids = vec_incl_rsid;
         self.excl_range = vec_excl_range;
         self.excl_rsids = vec_excl_rsid;
+        Ok(())
     }
 }
 

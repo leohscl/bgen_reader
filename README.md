@@ -15,4 +15,4 @@ Features:
 - [x] genotype reading
 - [x] vcf
 - [x] test phased data
-- [ ] file filters
+- [x] file filters

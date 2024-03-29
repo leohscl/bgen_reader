@@ -28,7 +28,7 @@ fn main() -> Result<()> {
         Command::List(list_args) => {
             let mut bgen_stream = BgenSteam::from_path(&cli.filename, cli.use_sample_file, false)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args);
+            bgen_stream.collect_filters(list_args)?;
             let mut writer = BufWriter::new(std::io::stdout());
             let line_header = b"alternate_ids\trsid\tchromosome\tposition\tnumber_of_alleles\tfirst_allele\talternative_alleles\n";
             writer.write_all(line_header)?;
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
         Command::Vcf(list_args) => {
             let mut bgen_stream = BgenSteam::from_path(&cli.filename, cli.use_sample_file, true)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args);
+            bgen_stream.collect_filters(list_args)?;
             vcf_writer::write_vcf("test.vcf", bgen_stream)?;
         }
     }

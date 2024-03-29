@@ -1,6 +1,8 @@
 use clap::error::ErrorKind;
 use clap::CommandFactory;
 use clap::{Args, Parser, Subcommand};
+use color_eyre::Report;
+use color_eyre::Result;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -42,42 +44,87 @@ pub struct ListArgs {
     #[command(flatten)]
     pub excl_rsid: ExclRsid,
 }
+type AllFilters = (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>);
 
 impl ListArgs {
-    pub fn with_incl_str(incl_str: String) -> Self {
-        ListArgs {
-            incl_range: InclRange {
-                incl_range: Some(incl_str),
-                incl_range_file: None,
-            },
-            incl_rsid: InclRsid::default(),
-            excl_range: ExclRange::default(),
-            excl_rsid: ExclRsid::default(),
-        }
+    pub fn with_incl_file(mut self, incl_file_str: String) -> Self {
+        self.incl_range = InclRange {
+            incl_range: None,
+            incl_range_file: Some(incl_file_str),
+        };
+        self
     }
 
-    pub fn get_vector_incl_and_excl(&self) -> (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>) {
+    pub fn with_excl_file(mut self, excl_file_str: String) -> Self {
+        self.excl_range = ExclRange {
+            excl_range: None,
+            excl_range_file: Some(excl_file_str),
+        };
+        self
+    }
+
+    pub fn with_incl_str(mut self, incl_str: String) -> Self {
+        self.incl_range = InclRange {
+            incl_range: Some(incl_str),
+            incl_range_file: None,
+        };
+        self
+    }
+
+    pub fn with_excl_str(mut self, excl_str: String) -> Self {
+        self.excl_range = ExclRange {
+            excl_range: Some(excl_str),
+            excl_range_file: None,
+        };
+        self
+    }
+
+    pub fn get_vector_incl_and_excl(&self) -> Result<AllFilters> {
         let opt_incl_range = match &self.incl_range {
             InclRange {
                 incl_range,
                 incl_range_file: None,
-            } => incl_range,
-            _ => todo!(),
+            } => incl_range.clone(),
+            InclRange {
+                incl_range: None,
+                incl_range_file,
+            } => Some(std::fs::read_to_string(
+                incl_range_file
+                    .clone()
+                    .ok_or(Report::msg("Range file does not exist"))?,
+            )?),
+            _ => panic!("Range file and range at command line specified"),
         };
-        let vec_incl_range = match validate_parsing_range(opt_incl_range.clone()) {
-            Ok(range) => range,
-            Err(cmd_error) => cmd_error.exit(),
+        let vec_incl_range = if let Some(incl_range_string) = opt_incl_range {
+            match validate_parsing_range(incl_range_string) {
+                Ok(range) => range,
+                Err(cmd_error) => cmd_error.exit(),
+            }
+        } else {
+            Vec::new()
         };
         let opt_excl_range = match &self.excl_range {
             ExclRange {
                 excl_range,
                 excl_range_file: None,
-            } => excl_range,
-            _ => todo!(),
+            } => excl_range.clone(),
+            ExclRange {
+                excl_range: None,
+                excl_range_file,
+            } => Some(std::fs::read_to_string(
+                excl_range_file
+                    .clone()
+                    .ok_or(Report::msg("Range file does not exist"))?,
+            )?),
+            _ => panic!("Range file and range at command line specified"),
         };
-        let vec_excl_range = match validate_parsing_range(opt_excl_range.clone()) {
-            Ok(range) => range,
-            Err(cmd_error) => cmd_error.exit(),
+        let vec_excl_range = if let Some(excl_range_string) = opt_excl_range {
+            match validate_parsing_range(excl_range_string) {
+                Ok(range) => range,
+                Err(cmd_error) => cmd_error.exit(),
+            }
+        } else {
+            Vec::new()
         };
         let opt_incl_rsid = match &self.incl_rsid {
             InclRsid {
@@ -95,7 +142,7 @@ impl ListArgs {
             _ => None,
         };
         let vec_excl_rsid: Vec<_> = opt_excl_rsid.into_iter().collect();
-        (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid)
+        Ok((vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid))
     }
 }
 
@@ -143,12 +190,10 @@ pub struct ExclRsid {
     pub excl_rsid_file: Option<String>,
 }
 
-pub fn validate_parsing_range(
-    incl_range: Option<String>,
-) -> Result<Vec<Range>, clap::error::Error> {
+pub fn validate_parsing_range(incl_range: String) -> Result<Vec<Range>, clap::error::Error> {
     incl_range
-        .as_ref()
-        .iter()
+        .trim_end_matches('\n')
+        .split('\n')
         .map(|v| Range::from_str(v, true))
         .collect()
 }
