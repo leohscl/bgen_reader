@@ -14,5 +14,5 @@ Features:
 - [x] excl-rsid
 - [x] genotype reading
 - [x] vcf
-- [ ] test phased data
+- [x] test phased data
 - [ ] file filters

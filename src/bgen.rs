@@ -93,19 +93,19 @@ impl<T: Read> BgenSteam<T> {
     }
     pub fn read_offset_and_header(&mut self) -> Result<()> {
         let start_data_offset = self.read_u32()?;
-        println!("start_data_offset: {}", start_data_offset);
+        log::info!("start_data_offset: {}", start_data_offset);
         let header_size = self.read_u32()?;
-        println!("Header size: {}", header_size);
+        log::info!("Header size: {}", header_size);
         if header_size < 20 {
             return Err(Report::msg(
                 "Header size of bgen is less than 20. The data is most likely corrupted",
             ));
         }
         let variant_num = self.read_u32()?;
-        println!("Number of variants: {}", variant_num);
+        log::info!("Number of variants: {}", variant_num);
         assert!(variant_num > 0);
         let sample_num = self.read_u32()?;
-        println!("Number of samples: {}", sample_num);
+        log::info!("Number of samples: {}", sample_num);
         assert!(sample_num > 0);
         read_into_buffer!(magic_num, self, 4);
         if !(magic_num == [0u8; 4] || &magic_num == b"bgen") {
@@ -115,7 +115,7 @@ impl<T: Read> BgenSteam<T> {
         }
         self.skip_bytes(header_size as usize - 20)?;
         let header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
-        println!("Layout id: {}", header_flags.layout_id);
+        log::info!("Layout id: {}", header_flags.layout_id);
 
         if header_flags.sample_id_present {
             self.read_samples()?;

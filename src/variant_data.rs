@@ -30,25 +30,30 @@ pub struct DataBlock {
     pub bytes_probability: u8,
     pub probabilities: Vec<u32>,
 }
+static SEPARATOR: &[u8] = "\t".as_bytes();
 
 impl VariantData {
     pub fn bgenix_print(&self, mut writer: impl Write) -> Result<()> {
         let mut buffer = [0u8; 20];
-        let separator = "\t".as_bytes();
-        writer.write_all(self.variants_id.as_bytes())?;
-        writer.write_all(separator)?;
-        writer.write_all(self.rsid.as_bytes())?;
-        writer.write_all(separator)?;
+        Self::write_with_sep(&mut writer, self.variants_id.as_bytes())?;
+        Self::write_with_sep(&mut writer, self.rsid.as_bytes())?;
         let b_pos = self.pos.numtoa(10, &mut buffer);
-        writer.write_all(b_pos)?;
-        writer.write_all(separator)?;
+        Self::write_with_sep(&mut writer, b_pos)?;
         let b_number_alleles = self.number_alleles.numtoa(10, &mut buffer);
-        writer.write_all(b_number_alleles)?;
-        writer.write_all(separator)?;
-        writer.write_all(self.alleles[0].as_bytes())?;
-        writer.write_all(separator)?;
-        writer.write_all(self.alleles[1].as_bytes())?;
+        Self::write_with_sep(&mut writer, b_number_alleles)?;
+        Self::write_with_sep(&mut writer, self.alleles[0].as_bytes())?;
+        Self::write_with_sep(&mut writer, self.alleles[1].as_bytes())?;
         writer.write_all(b"\n")?;
+        Ok(())
+    }
+
+    pub fn write_with_sep(mut writer: impl Write, b: &[u8]) -> Result<()> {
+        if b == b"" {
+            writer.write_all(b".")?;
+        } else {
+            writer.write_all(b)?;
+        }
+        writer.write_all(SEPARATOR)?;
         Ok(())
     }
 

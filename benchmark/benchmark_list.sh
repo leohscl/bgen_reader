@@ -15,15 +15,15 @@ fi
 
 # Benchmarking index file creation
 
-hyperfine -p "rm $bgi" "$generate_bgi"
-hyperfine -p "rm $bgi_rust" "$generate_bgi_rust"
-#
+# hyperfine -p "rm $bgi" "$generate_bgi"
+# hyperfine -p "rm $bgi_rust" "$generate_bgi_rust"
+
 # # Benchmarking listing of variants
-#
+
 hyperfine "./bgenix -g $bgen -list"
 hyperfine "../target/release/bgen_reader -f $bgen list"
-#
-# # Benchmarking vcf file
+
+# Benchmarking vcf file
 # hyperfine -r 1 "./bgenix -g $bgen -vcf > bgenix.vcf"
 # hyperfine -r 1 "../target/release/bgen_reader -f $bgen vcf"
 

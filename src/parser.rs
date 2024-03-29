@@ -8,6 +8,10 @@ pub struct Cli {
     #[arg(short, long, value_name = "FILE")]
     pub filename: String,
 
+    /// Verbose mode
+    #[arg(short, long)]
+    pub verbose: bool,
+
     /// Should the program try to find the .sample file associated with the bgen file
     #[arg(short, long, default_value_t = false)]
     pub use_sample_file: bool,
