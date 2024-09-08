@@ -1,5 +1,5 @@
 extern crate bgen_reader;
-use bgen_reader::bgen::BgenSteam;
+use bgen_reader::bgen::BgenStream;
 use bgen_reader::parser::ListArgs;
 use bgen_reader::variant_data::{DataBlock, VariantData};
 use std::io::Cursor;
@@ -157,9 +157,9 @@ fn test_double_filter_file() {
     );
 }
 
-fn create_bgen_and_read() -> BgenSteam<Cursor<Vec<u8>>> {
+fn create_bgen_and_read() -> BgenStream<Cursor<Vec<u8>>> {
     let bgen_bytes = include_bytes!("../data_test/samp_100_var_100.bgen");
-    let mut bgen_stream = BgenSteam::from_bytes(bgen_bytes.to_vec(), true).unwrap();
+    let mut bgen_stream = BgenStream::from_bytes(bgen_bytes.to_vec(), true).unwrap();
     bgen_stream.read_offset_and_header().unwrap();
     bgen_stream
 }

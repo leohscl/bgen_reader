@@ -1,5 +1,6 @@
 use crate::parser::ListArgs;
 use crate::parser::Range;
+use crate::variant_data;
 use crate::variant_data::{DataBlock, VariantData};
 use bitvec::prelude::*;
 use color_eyre::Report;
@@ -10,14 +11,17 @@ use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Cursor;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
-pub struct BgenSteam<T> {
+pub struct BgenStream<T> {
     stream: BufReader<T>,
     read_data_block: bool,
+    len_samples_block: u32,
     pub header: Header,
     pub metadata: Option<MetadataBgi>,
     pub byte_count: usize,
@@ -35,6 +39,18 @@ pub struct Header {
     variant_count: u32,
     pub sample_num: u32,
     pub header_flags: HeaderFlags,
+}
+
+impl Header {
+    fn write_header(self, writer: &mut BufWriter<File>) -> Result<()> {
+        write_u32(writer, self.start_data_offset)?;
+        write_u32(writer, self.header_size)?;
+        write_u32(writer, self.variant_num)?;
+        write_u32(writer, self.sample_num)?;
+        writer.write_all(b"bgen")?;
+        write_u32(writer, self.header_flags.to_u32())?;
+        Ok(())
+    }
 }
 
 pub struct MetadataBgi {
@@ -60,7 +76,7 @@ macro_rules! read_into_vector {
     };
 }
 
-impl<T: Read> BgenSteam<T> {
+impl<T: Read> BgenStream<T> {
     pub fn new(
         stream: BufReader<T>,
         metadata: Option<MetadataBgi>,
@@ -75,8 +91,9 @@ impl<T: Read> BgenSteam<T> {
             sample_num: 0,
             header_flags: HeaderFlags::default(),
         };
-        BgenSteam {
+        BgenStream {
             stream,
+            len_samples_block: 0,
             read_data_block,
             header,
             byte_count: 0,
@@ -88,9 +105,21 @@ impl<T: Read> BgenSteam<T> {
             samples,
         }
     }
+
+    pub fn to_bgen(self, output_path: &str) -> Result<()> {
+        let file = File::create(output_path)?;
+        let mut writer = BufWriter::new(file);
+        self.header.write_header(&mut writer)?;
+        Self::write_samples(self.samples, &mut writer, self.len_samples_block)?;
+        //self.into_iter()
+        //    .try_for_each(|variant_data| Self::write_variant_data(variant_data?));
+        Ok(())
+    }
+
     fn add_counter(&mut self, bytes: usize) {
         self.byte_count += bytes;
     }
+
     pub fn read_offset_and_header(&mut self) -> Result<()> {
         let start_data_offset = self.read_u32()?;
         log::info!("start_data_offset: {}", start_data_offset);
@@ -132,8 +161,23 @@ impl<T: Read> BgenSteam<T> {
         Ok(())
     }
 
+    fn write_samples(
+        samples: Vec<String>,
+        writer: &mut BufWriter<File>,
+        len_samples_block: u32,
+    ) -> Result<()> {
+        write_u32(writer, len_samples_block)?;
+        write_u32(writer, samples.len() as u32)?;
+        for sample in samples {
+            let bytes = sample.into_bytes();
+            write_u16(writer, bytes.len() as u16)?;
+            writer.write_all(&bytes)?;
+        }
+        Ok(())
+    }
+
     pub fn read_samples(&mut self) -> Result<()> {
-        let _length_samples_id = self.read_u32()?;
+        let len_samples_block = self.read_u32()?;
         let num_samples = self.read_u32()?;
         let new_samples: Vec<_> = (0..num_samples)
             .map(|_| {
@@ -147,8 +191,13 @@ impl<T: Read> BgenSteam<T> {
                 "Samples embedded in bgen file and in .sample file do not match."
             );
         }
+        self.len_samples_block = len_samples_block;
         self.samples = new_samples;
         Ok(())
+    }
+
+    fn write_variant_data(variant_data: VariantData) -> Result<()> {
+        todo!()
     }
 
     fn read_variant_data(&mut self) -> Result<VariantData> {
@@ -346,7 +395,7 @@ impl<T: Read> BgenSteam<T> {
     }
 }
 
-impl<T: Read> Iterator for BgenSteam<T> {
+impl<T: Read> Iterator for BgenStream<T> {
     type Item = Result<VariantData>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.header.variant_count >= self.header.variant_num {
@@ -368,7 +417,7 @@ impl<T: Read> Iterator for BgenSteam<T> {
     }
 }
 
-impl BgenSteam<File> {
+impl BgenStream<File> {
     pub fn from_path(path_str: &str, use_sample_file: bool, read_data_block: bool) -> Result<Self> {
         // Build metadata for file
         let path = Path::new(path_str);
@@ -411,7 +460,7 @@ impl BgenSteam<File> {
             first_1000_bytes,
             last_write_time,
         };
-        Ok(BgenSteam::new(
+        Ok(BgenStream::new(
             stream,
             Some(metadata),
             samples,
@@ -420,21 +469,30 @@ impl BgenSteam<File> {
     }
 }
 
-impl BgenSteam<Cursor<Vec<u8>>> {
+impl BgenStream<Cursor<Vec<u8>>> {
     pub fn from_bytes(bytes: Vec<u8>, read_data_block: bool) -> Result<Self> {
         let stream = BufReader::new(Cursor::new(bytes));
         let metadata = None;
-        Ok(BgenSteam::new(stream, metadata, vec![], read_data_block))
+        Ok(BgenStream::new(stream, metadata, vec![], read_data_block))
     }
 }
 
-impl<T: Read> Read for BgenSteam<T> {
+fn write_u16(writer: &mut BufWriter<File>, num: u16) -> Result<()> {
+    writer.write_all(&num.to_le_bytes())?;
+    Ok(())
+}
+fn write_u32(writer: &mut BufWriter<File>, num: u32) -> Result<()> {
+    writer.write_all(&num.to_le_bytes())?;
+    Ok(())
+}
+
+impl<T: Read> Read for BgenStream<T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.stream.read(buf)
     }
 }
 
-impl<T: Read> BufRead for BgenSteam<T> {
+impl<T: Read> BufRead for BgenStream<T> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.stream.fill_buf()
     }
@@ -461,5 +519,10 @@ impl HeaderFlags {
             layout_id,
             sample_id_present,
         })
+    }
+    fn to_u32(&self) -> u32 {
+        ((self.sample_id_present as u32) << 31)
+            + (self.compressed_snp_blocks as u32)
+            + ((self.layout_id as u32) << 2)
     }
 }

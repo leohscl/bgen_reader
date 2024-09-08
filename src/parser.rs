@@ -31,6 +31,8 @@ pub enum Command {
     Index,
     /// output VCF information
     Vcf(ListArgs),
+    /// Output Bgen information
+    Bgen(ListArgs),
 }
 
 #[derive(Parser, Default)]

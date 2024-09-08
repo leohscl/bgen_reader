@@ -4,6 +4,7 @@ Cargo.lock
 *.bgi
 *.bgi_rust
 *.vcf
+*.bgen
 data_test/samp_101_var_1000001_pfile.bgen
 data_test/samp_1000_var_100000.bgen
 data_test/samp_1001_var_100001_pfile.bgen

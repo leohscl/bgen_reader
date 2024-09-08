@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
 
-use crate::bgen::BgenSteam;
+use crate::bgen::BgenStream;
 const HEADER_LINES: &[&str] = &[
     "##fileformat=VCFv4.2\n",
     "##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Threshholded genotype call\">\n",
@@ -11,7 +11,7 @@ const HEADER_LINES: &[&str] = &[
     "##FORMAT=<ID=HP,Type=Float,Number=.,Description=\"Haplotype call probabilities\">\n",
 ];
 
-pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenSteam<T>) -> Result<()> {
+pub fn write_vcf<T: std::io::Read>(output_path: &str, bgen_stream: BgenStream<T>) -> Result<()> {
     let file = File::create(output_path)?;
     let mut writer = BufWriter::new(file);
     for line in HEADER_LINES {
