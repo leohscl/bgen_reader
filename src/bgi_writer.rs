@@ -1,4 +1,4 @@
-use crate::bgen::MetadataBgi;
+use crate::bgen::FileMetadata;
 use crate::variant_data::VariantData;
 use color_eyre::Result;
 use itertools::Itertools;
@@ -36,7 +36,7 @@ impl TableCreator {
         Ok(table_creator)
     }
 
-    pub fn init(&self, meta: &MetadataBgi) -> Result<()> {
+    pub fn init(&self, meta: &FileMetadata) -> Result<()> {
         // self.conn.execute("PRAGMA journal_mode = OFF", ())?;
         self.conn
             .execute(

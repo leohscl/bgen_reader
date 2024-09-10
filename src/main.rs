@@ -1,8 +1,9 @@
-use bgen_reader::bgen::BgenStream;
+use bgen_reader::bgen::{BgenStream, MetadataBgi};
 use bgen_reader::bgi_writer::TableCreator;
 use bgen_reader::parser::{Cli, Command};
 use bgen_reader::vcf_writer;
 use clap::Parser;
+use color_eyre::Report;
 use color_eyre::Result;
 use env_logger::Builder;
 use log::LevelFilter;
@@ -22,7 +23,15 @@ fn main() -> Result<()> {
             bgen_stream.read_offset_and_header()?;
             let bgi_filename = cli.filename.to_string() + ".bgi_rust";
             let table_creator = TableCreator::new(bgi_filename)?;
-            table_creator.init(bgen_stream.metadata.as_ref().unwrap())?;
+            let file_metadata = match bgen_stream.metadata.clone() {
+                MetadataBgi::File(file_metadata) => file_metadata,
+                _ => {
+                    return Err(Report::msg(
+                        "No file metadata in bgen constructed from file",
+                    ))
+                }
+            };
+            table_creator.init(&file_metadata)?;
             table_creator.store(bgen_stream)?;
         }
         Command::List(list_args) => {

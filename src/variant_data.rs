@@ -1,11 +1,13 @@
 use crate::parser::Range;
 use color_eyre::Result;
 use core::panic;
+use derivative::Derivative;
 use itertools::Itertools;
 use numtoa::NumToA;
 use std::io::Write;
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Derivative)]
+#[derivative(Default, Debug, PartialEq, Eq, Clone)]
 pub struct VariantData {
     pub number_individuals: Option<u32>,
     pub variants_id: String,
@@ -14,7 +16,9 @@ pub struct VariantData {
     pub pos: u32,
     pub number_alleles: u16,
     pub alleles: Vec<String>,
+    #[derivative(PartialEq = "ignore")]
     pub file_start_position: usize,
+    #[derivative(PartialEq = "ignore")]
     pub size_in_bytes: usize,
     pub data_block: DataBlock,
 }

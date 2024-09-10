@@ -1,11 +1,12 @@
 use crate::parser::ListArgs;
 use crate::parser::Range;
-use crate::variant_data;
 use crate::variant_data::{DataBlock, VariantData};
 use bitvec::prelude::*;
 use color_eyre::Report;
 use color_eyre::Result;
 use flate2::bufread::ZlibDecoder;
+use flate2::bufread::ZlibEncoder;
+use flate2::Compression;
 use itertools::Itertools;
 use std::fs::File;
 use std::io;
@@ -23,7 +24,7 @@ pub struct BgenStream<T> {
     read_data_block: bool,
     len_samples_block: u32,
     pub header: Header,
-    pub metadata: Option<MetadataBgi>,
+    pub metadata: MetadataBgi,
     pub byte_count: usize,
     pub incl_range: Vec<Range>,
     pub incl_rsids: Vec<String>,
@@ -32,6 +33,11 @@ pub struct BgenStream<T> {
     pub samples: Vec<String>,
 }
 
+pub trait BgenClone<T> {
+    fn create_identical_bgen(&self) -> Result<BgenStream<T>>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Header {
     pub start_data_offset: u32,
     pub header_size: u32,
@@ -42,7 +48,7 @@ pub struct Header {
 }
 
 impl Header {
-    fn write_header(self, writer: &mut BufWriter<File>) -> Result<()> {
+    fn write_header(&self, writer: &mut BufWriter<File>) -> Result<()> {
         write_u32(writer, self.start_data_offset)?;
         write_u32(writer, self.header_size)?;
         write_u32(writer, self.variant_num)?;
@@ -53,12 +59,23 @@ impl Header {
     }
 }
 
-pub struct MetadataBgi {
+#[derive(Clone, Debug)]
+pub struct FileMetadata {
     pub filename: String,
     pub file_size: u64,
     pub last_write_time: SystemTime,
     pub first_1000_bytes: Vec<u8>,
     pub index_creation_time: SystemTime,
+}
+
+#[derive(Clone, Debug)]
+pub struct BytesMetadata {
+    bytes: Vec<u8>,
+}
+#[derive(Clone, Debug)]
+pub enum MetadataBgi {
+    File(FileMetadata),
+    Bytes(BytesMetadata),
 }
 
 macro_rules! read_into_buffer {
@@ -79,7 +96,7 @@ macro_rules! read_into_vector {
 impl<T: Read> BgenStream<T> {
     pub fn new(
         stream: BufReader<T>,
-        metadata: Option<MetadataBgi>,
+        metadata: MetadataBgi,
         samples: Vec<String>,
         read_data_block: bool,
     ) -> Self {
@@ -104,16 +121,6 @@ impl<T: Read> BgenStream<T> {
             excl_rsids: vec![],
             samples,
         }
-    }
-
-    pub fn to_bgen(self, output_path: &str) -> Result<()> {
-        let file = File::create(output_path)?;
-        let mut writer = BufWriter::new(file);
-        self.header.write_header(&mut writer)?;
-        Self::write_samples(self.samples, &mut writer, self.len_samples_block)?;
-        //self.into_iter()
-        //    .try_for_each(|variant_data| Self::write_variant_data(variant_data?));
-        Ok(())
     }
 
     fn add_counter(&mut self, bytes: usize) {
@@ -162,14 +169,14 @@ impl<T: Read> BgenStream<T> {
     }
 
     fn write_samples(
-        samples: Vec<String>,
+        samples: &[String],
         writer: &mut BufWriter<File>,
         len_samples_block: u32,
     ) -> Result<()> {
         write_u32(writer, len_samples_block)?;
         write_u32(writer, samples.len() as u32)?;
         for sample in samples {
-            let bytes = sample.into_bytes();
+            let bytes = sample.clone().into_bytes();
             write_u16(writer, bytes.len() as u16)?;
             writer.write_all(&bytes)?;
         }
@@ -196,8 +203,28 @@ impl<T: Read> BgenStream<T> {
         Ok(())
     }
 
-    fn write_variant_data(variant_data: VariantData) -> Result<()> {
-        todo!()
+    fn write_variant_data(
+        variant_data: VariantData,
+        writer: &mut BufWriter<File>,
+        layout_id: u8,
+    ) -> Result<()> {
+        if layout_id == 1 {
+            write_u32(writer, variant_data.number_individuals.unwrap())?;
+        }
+        write_u16_sized_string(writer, variant_data.variants_id)?;
+        write_u16_sized_string(writer, variant_data.rsid)?;
+        write_u16_sized_string(writer, variant_data.chr)?;
+        write_u32(writer, variant_data.pos)?;
+        if layout_id != 1 {
+            write_u16(writer, variant_data.number_alleles)?;
+        }
+        variant_data
+            .alleles
+            .into_iter()
+            .map(|allele| write_u32_sized_string(writer, allele))
+            .collect::<Result<Vec<_>>>()?;
+        Self::write_data_block(writer, variant_data.data_block)?;
+        Ok(())
     }
 
     fn read_variant_data(&mut self) -> Result<VariantData> {
@@ -263,6 +290,45 @@ impl<T: Read> BgenStream<T> {
             "Uncompressed data length is expected to be the same as computed uncompressed length"
         );
         Self::build_from_uncompressed_block(uncompressed_block)
+    }
+
+    fn write_data_block(writer: &mut BufWriter<File>, data_block: DataBlock) -> Result<()> {
+        let mut data = Vec::new();
+        let mut data_writer = BufWriter::new(&mut data);
+        write_u32(&mut data_writer, data_block.number_individuals)?;
+        write_u16(&mut data_writer, data_block.number_alleles)?;
+        write_u8(&mut data_writer, data_block.minimum_ploidy)?;
+        write_u8(&mut data_writer, data_block.maximum_ploidy)?;
+        data_block
+            .ploidy_missingness
+            .into_iter()
+            .map(|p| write_u8(&mut data_writer, p))
+            .collect::<Result<Vec<_>>>()?;
+        write_u8(&mut data_writer, data_block.phased as u8)?;
+        write_u8(&mut data_writer, data_block.bytes_probability)?;
+        assert_eq!(data_block.bytes_probability % 8, 0);
+        let chunk_size = (data_block.bytes_probability / 8) as usize;
+        data_block
+            .probabilities
+            .into_iter()
+            .map(|probability| {
+                probability
+                    .to_le_bytes()
+                    .into_iter()
+                    .take(chunk_size)
+                    .map(|byte_proba| write_u8(&mut data_writer, byte_proba))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        data_writer.flush()?;
+        drop(data_writer);
+        let uncompressed_length = data.len() as u32;
+        let block = Self::compress_data(&data)?;
+        let length_data_block = block.len() as u32 + 4;
+        write_u32(writer, length_data_block)?;
+        write_u32(writer, uncompressed_length)?;
+        writer.write_all(&block)?;
+        Ok(())
     }
 
     fn build_from_uncompressed_block(block: Vec<u8>) -> Result<DataBlock> {
@@ -346,6 +412,13 @@ impl<T: Read> BgenStream<T> {
         Ok(decoded)
     }
 
+    fn compress_data(data: &Vec<u8>) -> Result<Vec<u8>> {
+        let mut encoder = ZlibEncoder::new(Cursor::new(data), Compression::fast());
+        let mut block = Vec::new();
+        encoder.read_to_end(&mut block)?;
+        Ok(block)
+    }
+
     fn read_vector_length(&mut self, length: usize) -> Result<Vec<u8>> {
         read_into_vector!(bytes, self, length);
         Ok(bytes)
@@ -417,6 +490,28 @@ impl<T: Read> Iterator for BgenStream<T> {
     }
 }
 
+impl<T: Read> BgenStream<T>
+where
+    BgenStream<T>: BgenClone<T>,
+{
+    pub fn to_bgen(mut self, output_path: &str) -> Result<()> {
+        let mut other = self.create_identical_bgen()?;
+        other.read_offset_and_header()?;
+        self.read_data_block = false;
+        // first pass to get the number of variants
+        let num_variants = self.count();
+        other.header.variant_num = num_variants as u32;
+        let file = File::create(output_path)?;
+        let mut writer = BufWriter::new(file);
+        other.header.write_header(&mut writer)?;
+        Self::write_samples(&other.samples, &mut writer, other.len_samples_block)?;
+        let layout_id = other.header.header_flags.layout_id;
+        other.try_for_each(|variant_data| {
+            Self::write_variant_data(variant_data?, &mut writer, layout_id)
+        })
+    }
+}
+
 impl BgenStream<File> {
     pub fn from_path(path_str: &str, use_sample_file: bool, read_data_block: bool) -> Result<Self> {
         // Build metadata for file
@@ -453,7 +548,7 @@ impl BgenStream<File> {
 
         let file = File::open(path_str)?;
         let stream = BufReader::new(file);
-        let metadata = MetadataBgi {
+        let metadata_file = FileMetadata {
             filename: filename.to_str().unwrap().to_string(),
             file_size,
             index_creation_time,
@@ -462,26 +557,88 @@ impl BgenStream<File> {
         };
         Ok(BgenStream::new(
             stream,
-            Some(metadata),
+            MetadataBgi::File(metadata_file),
             samples,
             read_data_block,
         ))
     }
 }
 
-impl BgenStream<Cursor<Vec<u8>>> {
-    pub fn from_bytes(bytes: Vec<u8>, read_data_block: bool) -> Result<Self> {
-        let stream = BufReader::new(Cursor::new(bytes));
-        let metadata = None;
-        Ok(BgenStream::new(stream, metadata, vec![], read_data_block))
+impl BgenClone<File> for BgenStream<File> {
+    fn create_identical_bgen(&self) -> Result<BgenStream<File>> {
+        match self.metadata.clone() {
+            MetadataBgi::File(file_meta) => BgenStream::from_path(&file_meta.filename, false, true),
+            _ => Err(Report::msg(
+                "No file metadata in bgen constructed from file",
+            )),
+        }
     }
 }
 
-fn write_u16(writer: &mut BufWriter<File>, num: u16) -> Result<()> {
+impl BgenStream<Cursor<Vec<u8>>> {
+    pub fn from_bytes(bytes: Vec<u8>, read_data_block: bool) -> Result<Self> {
+        let metadata = MetadataBgi::Bytes(BytesMetadata {
+            bytes: bytes.clone(),
+        });
+        let stream = BufReader::new(Cursor::new(bytes));
+        Ok(BgenStream::new(stream, metadata, vec![], read_data_block))
+    }
+
+    pub fn create_identical_bgen(&self) -> Result<BgenStream<Cursor<Vec<u8>>>> {
+        match self.metadata.clone() {
+            MetadataBgi::Bytes(meta_bytes) => BgenStream::from_bytes(meta_bytes.bytes, true),
+            MetadataBgi::File(_) => Err(Report::msg(
+                "No bytes metadata in bgen constructed from file",
+            )),
+        }
+    }
+}
+
+impl BgenClone<Cursor<Vec<u8>>> for BgenStream<Cursor<Vec<u8>>> {
+    fn create_identical_bgen(&self) -> Result<BgenStream<Cursor<Vec<u8>>>> {
+        match self.metadata.clone() {
+            MetadataBgi::Bytes(meta_bytes) => BgenStream::from_bytes(meta_bytes.bytes, true),
+            MetadataBgi::File(_) => Err(Report::msg(
+                "No bytes metadata in bgen constructed from file",
+            )),
+        }
+    }
+}
+
+fn write_u16_sized_string(writer: &mut BufWriter<File>, string: String) -> Result<()> {
+    let num = string.len() as u16;
+    writer.write_all(&num.to_le_bytes())?;
+    writer.write_all(&string.into_bytes())?;
+    Ok(())
+}
+
+fn write_u32_sized_string(writer: &mut BufWriter<File>, string: String) -> Result<()> {
+    let num = string.len() as u32;
+    writer.write_all(&num.to_le_bytes())?;
+    writer.write_all(&string.into_bytes())?;
+    Ok(())
+}
+
+fn write_u8<T>(writer: &mut BufWriter<T>, num: u8) -> Result<()>
+where
+    T: std::io::Write,
+{
     writer.write_all(&num.to_le_bytes())?;
     Ok(())
 }
-fn write_u32(writer: &mut BufWriter<File>, num: u32) -> Result<()> {
+
+fn write_u16<T>(writer: &mut BufWriter<T>, num: u16) -> Result<()>
+where
+    T: std::io::Write,
+{
+    writer.write_all(&num.to_le_bytes())?;
+    Ok(())
+}
+
+fn write_u32<T>(writer: &mut BufWriter<T>, num: u32) -> Result<()>
+where
+    T: std::io::Write,
+{
     writer.write_all(&num.to_le_bytes())?;
     Ok(())
 }
@@ -502,7 +659,7 @@ impl<T: Read> BufRead for BgenStream<T> {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct HeaderFlags {
     pub compressed_snp_blocks: bool,
     pub layout_id: u8,

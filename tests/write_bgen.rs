@@ -1,31 +1,44 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::BgenStream;
-use std::fs::File;
+use bgen_reader::parser::ListArgs;
 use std::io::Cursor;
-use std::io::Read;
-use std::u8;
+
+const OUT_FILE: &str = "test.bgen";
 
 #[test]
-fn variants_num_read() {
-    let bgen_stream = create_bgen_and_read();
-    let output_file = "test.bgen";
-    bgen_stream.to_bgen(output_file).unwrap();
-    let mut file_test = File::open(output_file).unwrap();
-    const NUM_BYTES_CMP: usize = 4050;
-    let mut buffer_input = Vec::new();
-    file_test.read_to_end(&mut buffer_input).unwrap();
-    let bgen_bytes = include_bytes!("../data_test/samp_100_var_100.bgen")
-        .iter()
-        .take(NUM_BYTES_CMP)
-        .cloned()
-        .collect::<Vec<_>>();
-    //for chunk in (0..NUM_BYTES_CMP).collect::<Vec<usize>>().chunks(50) {
-    //    assert_eq!(
-    //        bgen_bytes[chunk[0]..chunk[1]],
-    //        buffer_input[chunk[0]..chunk[1]]
-    //    );
-    //}
-    //assert_eq!(bgen_bytes, buffer_input);
+fn compare_original_and_rewrite() {
+    create_bgen_and_read().to_bgen(OUT_FILE).unwrap();
+    let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
+    bgen_stream_test.read_offset_and_header().unwrap();
+    let bgen_bytes = include_bytes!("../data_test/samp_100_var_100.bgen");
+    let mut bgen_stream_oracle = BgenStream::from_bytes(bgen_bytes.to_vec(), true).unwrap();
+    bgen_stream_oracle.read_offset_and_header().unwrap();
+
+    assert_eq!(bgen_stream_test.header, bgen_stream_oracle.header);
+    assert_eq!(bgen_stream_test.samples, bgen_stream_oracle.samples);
+    //dbg!("reading data block test");
+    let data_blocks_test = bgen_stream_test.collect::<Result<Vec<_>, _>>().unwrap();
+    let data_blocks_oracle = bgen_stream_oracle.collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(
+        data_blocks_test.len(),
+        data_blocks_oracle.len(),
+        "Length is not equal !"
+    );
+    assert_eq!(data_blocks_test, data_blocks_oracle);
+}
+
+#[test]
+fn filtering_on_bgen_write() {
+    let mut bgen_stream = create_bgen_and_read();
+    let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
+    bgen_stream.collect_filters(list_args).unwrap();
+    bgen_stream.to_bgen(OUT_FILE).unwrap();
+    let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
+    bgen_stream_test.read_offset_and_header().unwrap();
+    assert_eq!(1, bgen_stream_test.header.variant_num);
+    let variant_data: Vec<_> = bgen_stream_test.map(|r| r.unwrap()).collect();
+    dbg!(&variant_data);
+    assert_eq!(1, variant_data.len());
 }
 
 fn create_bgen_and_read() -> BgenStream<Cursor<Vec<u8>>> {
