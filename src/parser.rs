@@ -30,9 +30,15 @@ pub enum Command {
     /// Index the bgen file
     Index,
     /// output VCF information
-    Vcf(ListArgs),
+    Vcf(ListArgsNamed),
     /// Output Bgen information
-    Bgen(ListArgs),
+    Bgen(ListArgsNamed),
+}
+#[derive(Parser, Default)]
+pub struct ListArgsNamed {
+    #[command(flatten)]
+    pub list_args: ListArgs,
+    pub name: String,
 }
 
 #[derive(Parser, Default)]

@@ -62,6 +62,7 @@ impl Header {
 #[derive(Clone, Debug)]
 pub struct FileMetadata {
     pub filename: String,
+    pub path: String,
     pub file_size: u64,
     pub last_write_time: SystemTime,
     pub first_1000_bytes: Vec<u8>,
@@ -550,6 +551,7 @@ impl BgenStream<File> {
         let stream = BufReader::new(file);
         let metadata_file = FileMetadata {
             filename: filename.to_str().unwrap().to_string(),
+            path: path_str.to_string(),
             file_size,
             index_creation_time,
             first_1000_bytes,
@@ -567,7 +569,7 @@ impl BgenStream<File> {
 impl BgenClone<File> for BgenStream<File> {
     fn create_identical_bgen(&self) -> Result<BgenStream<File>> {
         match self.metadata.clone() {
-            MetadataBgi::File(file_meta) => BgenStream::from_path(&file_meta.filename, false, true),
+            MetadataBgi::File(file_meta) => BgenStream::from_path(&file_meta.path, false, true),
             _ => Err(Report::msg(
                 "No file metadata in bgen constructed from file",
             )),

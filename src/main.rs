@@ -43,17 +43,17 @@ fn main() -> Result<()> {
             writer.write_all(line_header)?;
             bgen_stream.try_for_each(|variant_data| variant_data?.bgenix_print(&mut writer))?
         }
-        Command::Vcf(list_args) => {
+        Command::Vcf(list_args_named) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, true)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args)?;
-            vcf_writer::write_vcf("test.vcf", bgen_stream)?;
+            bgen_stream.collect_filters(list_args_named.list_args)?;
+            vcf_writer::write_vcf(&list_args_named.name, bgen_stream)?;
         }
-        Command::Bgen(list_args) => {
+        Command::Bgen(list_args_named) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, true)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args)?;
-            bgen_stream.to_bgen("test.bgen")?;
+            bgen_stream.collect_filters(list_args_named.list_args)?;
+            bgen_stream.to_bgen(&list_args_named.name)?;
         }
     }
     Ok(())
