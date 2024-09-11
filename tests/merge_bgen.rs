@@ -1,7 +1,8 @@
 extern crate bgen_reader;
-use bgen_reader::bgen::bgen_merge;
-use bgen_reader::bgen::BgenStream;
+use bgen_reader::bgen::bgen_stream::bgen_merge;
+use bgen_reader::bgen::bgen_stream::BgenStream;
 use bgen_reader::parser::ListArgs;
+use serial_test::serial;
 use std::fs::File;
 use std::io::Cursor;
 use std::io::LineWriter;
@@ -11,6 +12,7 @@ const OUT_FILE_1_VAR: &str = "with_1_var.bgen";
 const OUT_FILE_99_VAR: &str = "with_99_var.bgen";
 
 #[test]
+#[serial]
 fn filtering_then_merging() {
     let mut bgen_stream = create_bgen_and_read();
     let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
@@ -30,6 +32,10 @@ fn filtering_then_merging() {
     let merge_output = "reconstructed.bgen";
     bgen_merge(merge_name.to_string(), merge_output.to_string()).unwrap();
     assert_bgen_equality("data_test/samp_100_var_100.bgen", merge_output);
+    std::fs::remove_file(OUT_FILE_99_VAR).unwrap();
+    std::fs::remove_file(OUT_FILE_1_VAR).unwrap();
+    std::fs::remove_file(merge_output).unwrap();
+    std::fs::remove_file(merge_name).unwrap();
 }
 
 fn create_bgen_and_read() -> BgenStream<Cursor<Vec<u8>>> {

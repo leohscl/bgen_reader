@@ -1,11 +1,13 @@
 extern crate bgen_reader;
-use bgen_reader::bgen::BgenStream;
+use bgen_reader::bgen::bgen_stream::BgenStream;
 use bgen_reader::parser::ListArgs;
+use serial_test::serial;
 use std::io::Cursor;
 
 const OUT_FILE: &str = "test.bgen";
 
 #[test]
+#[serial]
 fn compare_original_and_rewrite() {
     create_bgen_and_read().to_bgen(OUT_FILE).unwrap();
     let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
@@ -25,9 +27,11 @@ fn compare_original_and_rewrite() {
         "Length is not equal !"
     );
     assert_eq!(data_blocks_test, data_blocks_oracle);
+    std::fs::remove_file(OUT_FILE).unwrap();
 }
 
 #[test]
+#[serial]
 fn filtering_on_bgen_write() {
     let mut bgen_stream = create_bgen_and_read();
     let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
@@ -39,6 +43,7 @@ fn filtering_on_bgen_write() {
     let variant_data: Vec<_> = bgen_stream_test.map(|r| r.unwrap()).collect();
     dbg!(&variant_data);
     assert_eq!(1, variant_data.len());
+    std::fs::remove_file(OUT_FILE).unwrap();
 }
 
 fn create_bgen_and_read() -> BgenStream<Cursor<Vec<u8>>> {

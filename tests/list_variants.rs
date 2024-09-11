@@ -1,7 +1,7 @@
 extern crate bgen_reader;
-use bgen_reader::bgen::BgenStream;
+use bgen_reader::bgen::bgen_stream::BgenStream;
+use bgen_reader::bgen::variant_data::{DataBlock, VariantData};
 use bgen_reader::parser::ListArgs;
-use bgen_reader::variant_data::{DataBlock, VariantData};
 use std::io::Cursor;
 use std::io::Write;
 use tempfile::tempdir;

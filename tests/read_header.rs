@@ -1,6 +1,6 @@
 extern crate bgen_reader;
-use bgen_reader::bgen::BgenStream;
-use bgen_reader::bgen::HeaderFlags;
+use bgen_reader::bgen::bgen_stream::BgenStream;
+use bgen_reader::bgen::header::HeaderFlags;
 use std::io::Cursor;
 
 #[test]
