@@ -1,4 +1,4 @@
-use bgen_reader::bgen::{BgenStream, MetadataBgi};
+use bgen_reader::bgen::{bgen_merge, BgenStream, MetadataBgi};
 use bgen_reader::bgi_writer::TableCreator;
 use bgen_reader::parser::{Cli, Command};
 use bgen_reader::vcf_writer;
@@ -54,6 +54,9 @@ fn main() -> Result<()> {
             bgen_stream.read_offset_and_header()?;
             bgen_stream.collect_filters(list_args_named.list_args)?;
             bgen_stream.to_bgen(&list_args_named.name)?;
+        }
+        Command::Merge(merge_filename) => {
+            bgen_merge(merge_filename.name, merge_filename.output_name)?;
         }
     }
     Ok(())

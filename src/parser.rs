@@ -33,6 +33,13 @@ pub enum Command {
     Vcf(ListArgsNamed),
     /// Output Bgen information
     Bgen(ListArgsNamed),
+    /// Merge multiple bgen files together
+    Merge(MergeArgs),
+}
+#[derive(Parser, Default)]
+pub struct MergeArgs {
+    pub name: String,
+    pub output_name: String,
 }
 #[derive(Parser, Default)]
 pub struct ListArgsNamed {

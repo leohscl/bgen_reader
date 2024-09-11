@@ -4,18 +4,12 @@ use crate::variant_data::{DataBlock, VariantData};
 use bitvec::prelude::*;
 use color_eyre::Report;
 use color_eyre::Result;
-use flate2::bufread::ZlibDecoder;
-use flate2::bufread::ZlibEncoder;
+use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use itertools::Itertools;
 use std::fs::File;
 use std::io;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::BufWriter;
-use std::io::Cursor;
-use std::io::Read;
-use std::io::Write;
+use std::io::{BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -25,12 +19,17 @@ pub struct BgenStream<T> {
     len_samples_block: u32,
     pub header: Header,
     pub metadata: MetadataBgi,
+    pub ranges: Ranges,
     pub byte_count: usize,
+    pub samples: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct Ranges {
     pub incl_range: Vec<Range>,
     pub incl_rsids: Vec<String>,
     pub excl_range: Vec<Range>,
     pub excl_rsids: Vec<String>,
-    pub samples: Vec<String>,
 }
 
 pub trait BgenClone<T> {
@@ -109,17 +108,20 @@ impl<T: Read> BgenStream<T> {
             sample_num: 0,
             header_flags: HeaderFlags::default(),
         };
+        let ranges = Ranges {
+            incl_range: vec![],
+            incl_rsids: vec![],
+            excl_range: vec![],
+            excl_rsids: vec![],
+        };
         BgenStream {
             stream,
             len_samples_block: 0,
             read_data_block,
             header,
+            ranges,
             byte_count: 0,
             metadata,
-            incl_range: vec![],
-            incl_rsids: vec![],
-            excl_range: vec![],
-            excl_rsids: vec![],
             samples,
         }
     }
@@ -461,12 +463,65 @@ impl<T: Read> BgenStream<T> {
     pub fn collect_filters(&mut self, list_args: ListArgs) -> Result<()> {
         let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
             list_args.get_vector_incl_and_excl()?;
-        self.incl_range = vec_incl_range;
-        self.incl_rsids = vec_incl_rsid;
-        self.excl_range = vec_excl_range;
-        self.excl_rsids = vec_excl_rsid;
+        self.ranges.incl_range = vec_incl_range;
+        self.ranges.incl_rsids = vec_incl_rsid;
+        self.ranges.excl_range = vec_excl_range;
+        self.ranges.excl_rsids = vec_excl_rsid;
         Ok(())
     }
+}
+pub fn bgen_merge(merge_filename: String, output_name: String) -> Result<()> {
+    let file = File::create(output_name)?;
+    let mut writer = BufWriter::new(file);
+    let lines = read_lines(merge_filename.clone())?;
+    let mut num_variants = 0;
+    // first pass to read
+    println!("First pass for merging, computing the number of variants and checking samples");
+    let mut samples = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        println!("Reading file {}, at line {}", line, i);
+        let mut bgen_stream = BgenStream::from_path(line, false, false)?;
+        bgen_stream.read_offset_and_header()?;
+        num_variants += bgen_stream.header.variant_num;
+        if i == 0 {
+            samples = bgen_stream.samples;
+        } else {
+            assert_eq!(samples, bgen_stream.samples)
+        }
+    }
+
+    println!("Second pass for merging, writing variant data");
+    for (i, line) in lines.iter().enumerate() {
+        println!("Reading file {}, at line {}", line, i);
+        let mut bgen_stream = BgenStream::from_path(line, false, true)?;
+        bgen_stream.read_offset_and_header()?;
+        if i == 0 {
+            let mut header = bgen_stream.header.clone();
+            header.variant_num = num_variants;
+            header.write_header(&mut writer)?;
+            BgenStream::<File>::write_samples(
+                &bgen_stream.samples,
+                &mut writer,
+                bgen_stream.len_samples_block,
+            )?;
+        }
+        let layout_id = bgen_stream.header.header_flags.layout_id;
+        bgen_stream.try_for_each(|variant_data| {
+            BgenStream::<File>::write_variant_data(variant_data?, &mut writer, layout_id)
+        })?;
+    }
+    Ok(())
+}
+
+fn read_lines<P>(filename: P) -> Result<Vec<String>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    let result = BufReader::new(file)
+        .lines()
+        .collect::<io::Result<Vec<_>>>()?;
+    Ok(result)
 }
 
 impl<T: Read> Iterator for BgenStream<T> {
@@ -478,10 +533,10 @@ impl<T: Read> Iterator for BgenStream<T> {
             while let Ok(var_data) = self.read_variant_data() {
                 self.header.variant_count += 1;
                 if var_data.filter_with_args(
-                    &self.incl_range,
-                    &self.incl_rsids,
-                    &self.excl_range,
-                    &self.excl_rsids,
+                    &self.ranges.incl_range,
+                    &self.ranges.incl_rsids,
+                    &self.ranges.excl_range,
+                    &self.ranges.excl_rsids,
                 ) {
                     return Some(Ok(var_data));
                 }
@@ -496,19 +551,24 @@ where
     BgenStream<T>: BgenClone<T>,
 {
     pub fn to_bgen(mut self, output_path: &str) -> Result<()> {
-        let mut other = self.create_identical_bgen()?;
-        other.read_offset_and_header()?;
-        self.read_data_block = false;
-        // first pass to get the number of variants
-        let num_variants = self.count();
-        other.header.variant_num = num_variants as u32;
         let file = File::create(output_path)?;
         let mut writer = BufWriter::new(file);
-        other.header.write_header(&mut writer)?;
+        let mut other = self.create_identical_bgen()?;
+        other.read_offset_and_header()?;
+        dbg!(other.header.variant_num);
+        dbg!(other.header.variant_count);
+        self.read_data_block = false;
+        // first pass to get the number of variants
+        let mut header_final = self.header.clone();
+        let num_variants = self.count();
+        header_final.variant_num = num_variants as u32;
+        header_final.write_header(&mut writer)?;
         Self::write_samples(&other.samples, &mut writer, other.len_samples_block)?;
         let layout_id = other.header.header_flags.layout_id;
         other.try_for_each(|variant_data| {
-            Self::write_variant_data(variant_data?, &mut writer, layout_id)
+            let var_data = variant_data?;
+            dbg!(&var_data.rsid);
+            Self::write_variant_data(var_data, &mut writer, layout_id)
         })
     }
 }
@@ -568,12 +628,14 @@ impl BgenStream<File> {
 
 impl BgenClone<File> for BgenStream<File> {
     fn create_identical_bgen(&self) -> Result<BgenStream<File>> {
-        match self.metadata.clone() {
+        let mut new_bgen = match self.metadata.clone() {
             MetadataBgi::File(file_meta) => BgenStream::from_path(&file_meta.path, false, true),
             _ => Err(Report::msg(
                 "No file metadata in bgen constructed from file",
             )),
-        }
+        }?;
+        new_bgen.ranges.clone_from(&self.ranges);
+        Ok(new_bgen)
     }
 }
 
@@ -585,25 +647,18 @@ impl BgenStream<Cursor<Vec<u8>>> {
         let stream = BufReader::new(Cursor::new(bytes));
         Ok(BgenStream::new(stream, metadata, vec![], read_data_block))
     }
-
-    pub fn create_identical_bgen(&self) -> Result<BgenStream<Cursor<Vec<u8>>>> {
-        match self.metadata.clone() {
-            MetadataBgi::Bytes(meta_bytes) => BgenStream::from_bytes(meta_bytes.bytes, true),
-            MetadataBgi::File(_) => Err(Report::msg(
-                "No bytes metadata in bgen constructed from file",
-            )),
-        }
-    }
 }
 
 impl BgenClone<Cursor<Vec<u8>>> for BgenStream<Cursor<Vec<u8>>> {
     fn create_identical_bgen(&self) -> Result<BgenStream<Cursor<Vec<u8>>>> {
-        match self.metadata.clone() {
+        let mut new_bgen = match self.metadata.clone() {
             MetadataBgi::Bytes(meta_bytes) => BgenStream::from_bytes(meta_bytes.bytes, true),
             MetadataBgi::File(_) => Err(Report::msg(
                 "No bytes metadata in bgen constructed from file",
             )),
-        }
+        }?;
+        new_bgen.ranges.clone_from(&self.ranges);
+        Ok(new_bgen)
     }
 }
 
