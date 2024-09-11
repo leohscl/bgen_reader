@@ -1,7 +1,7 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::bgen_stream::BgenStream;
 use bgen_reader::bgen::variant_data::{DataBlock, VariantData};
-use bgen_reader::parser::ListArgs;
+use bgen_reader::parser::FilterArgs;
 use std::io::Cursor;
 use std::io::Write;
 use tempfile::tempdir;
@@ -66,7 +66,7 @@ fn first_variant_correct() {
 #[test]
 fn test_no_filter() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default();
+    let list_args = FilterArgs::default();
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(100, variant_data.len());
@@ -75,7 +75,7 @@ fn test_no_filter() {
 #[test]
 fn test_filter() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(1, variant_data.len());
@@ -84,7 +84,7 @@ fn test_filter() {
 #[test]
 fn test_double_filter() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default()
+    let list_args = FilterArgs::default()
         .with_incl_str("1:0-900000".to_string())
         .with_excl_str("1:800000-850000".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
@@ -116,7 +116,7 @@ fn test_filter_file() {
     let mut file = std::fs::File::create(filepath.clone()).unwrap();
     writeln!(file, "1:0-752567").unwrap();
     let list_args =
-        ListArgs::default().with_incl_file(filepath.into_os_string().into_string().unwrap());
+        FilterArgs::default().with_incl_file(filepath.into_os_string().into_string().unwrap());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(1, variant_data.len());
@@ -134,7 +134,7 @@ fn test_double_filter_file() {
     let filepath_excl = dir.path().join(filename_excl);
     let mut file_excl = std::fs::File::create(filepath_excl.clone()).unwrap();
     writeln!(file_excl, "1:800000-850000").unwrap();
-    let list_args = ListArgs::default()
+    let list_args = FilterArgs::default()
         .with_incl_file(filepath_incl.into_os_string().into_string().unwrap())
         .with_excl_file(filepath_excl.into_os_string().into_string().unwrap());
     bgen_stream.collect_filters(list_args).unwrap();

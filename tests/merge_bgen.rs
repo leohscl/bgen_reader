@@ -1,7 +1,7 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::bgen_stream::bgen_merge;
 use bgen_reader::bgen::bgen_stream::BgenStream;
-use bgen_reader::parser::ListArgs;
+use bgen_reader::parser::FilterArgs;
 use serial_test::serial;
 use std::fs::File;
 use std::io::Cursor;
@@ -15,11 +15,11 @@ const OUT_FILE_99_VAR: &str = "with_99_var.bgen";
 #[serial]
 fn filtering_then_merging() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     bgen_stream.to_bgen(OUT_FILE_1_VAR).unwrap();
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default().with_excl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_excl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     bgen_stream.to_bgen(OUT_FILE_99_VAR).unwrap();
     let merge_name = "tmp.merge";

@@ -26,13 +26,13 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     /// List the variants in the file.
-    List(ListArgs),
+    List(FilterArgsList),
     /// Index the bgen file
     Index,
     /// output VCF information
-    Vcf(ListArgsNamed),
+    Vcf(FilterArgsNamed),
     /// Output Bgen information
-    Bgen(ListArgsNamed),
+    Bgen(FilterArgsNamed),
     /// Merge multiple bgen files together
     Merge(MergeArgs),
 }
@@ -42,14 +42,28 @@ pub struct MergeArgs {
     pub output_name: String,
 }
 #[derive(Parser, Default)]
-pub struct ListArgsNamed {
+pub struct FilterArgsNamed {
     #[command(flatten)]
-    pub list_args: ListArgs,
+    pub filter_args: FilterArgs,
     pub name: String,
+}
+#[derive(Parser, Default)]
+pub struct FilterArgsList {
+    #[command(flatten)]
+    pub filter_args: FilterArgs,
+    #[command(subcommand)]
+    pub variant_output: VariantOutput,
+}
+
+#[derive(Subcommand, Default, Clone)]
+pub enum VariantOutput {
+    #[default]
+    Bgenix,
+    Rsid,
 }
 
 #[derive(Parser, Default)]
-pub struct ListArgs {
+pub struct FilterArgs {
     #[command(flatten)]
     pub incl_range: InclRange,
     #[command(flatten)]
@@ -61,7 +75,7 @@ pub struct ListArgs {
 }
 type AllFilters = (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>);
 
-impl ListArgs {
+impl FilterArgs {
     pub fn with_incl_file(mut self, incl_file_str: String) -> Self {
         self.incl_range = InclRange {
             incl_range: None,

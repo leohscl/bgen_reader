@@ -1,0 +1,1 @@
+echo "Testing merging times"

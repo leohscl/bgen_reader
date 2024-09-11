@@ -34,25 +34,27 @@ fn main() -> Result<()> {
             table_creator.init(&file_metadata)?;
             table_creator.store(bgen_stream)?;
         }
-        Command::List(list_args) => {
+        Command::List(filter_args_list) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, false)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args)?;
+            bgen_stream.collect_filters(filter_args_list.filter_args)?;
             let mut writer = BufWriter::new(std::io::stdout());
             let line_header = b"alternate_ids\trsid\tchromosome\tposition\tnumber_of_alleles\tfirst_allele\talternative_alleles\n";
             writer.write_all(line_header)?;
-            bgen_stream.try_for_each(|variant_data| variant_data?.bgenix_print(&mut writer))?
+            bgen_stream.try_for_each(|variant_data| {
+                variant_data?.print(&mut writer, filter_args_list.variant_output.clone())
+            })?
         }
         Command::Vcf(list_args_named) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, true)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args_named.list_args)?;
+            bgen_stream.collect_filters(list_args_named.filter_args)?;
             vcf_writer::write_vcf(&list_args_named.name, bgen_stream)?;
         }
         Command::Bgen(list_args_named) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, true)?;
             bgen_stream.read_offset_and_header()?;
-            bgen_stream.collect_filters(list_args_named.list_args)?;
+            bgen_stream.collect_filters(list_args_named.filter_args)?;
             bgen_stream.to_bgen(&list_args_named.name)?;
         }
         Command::Merge(merge_filename) => {

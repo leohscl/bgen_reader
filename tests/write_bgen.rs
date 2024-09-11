@@ -1,6 +1,6 @@
 extern crate bgen_reader;
 use bgen_reader::bgen::bgen_stream::BgenStream;
-use bgen_reader::parser::ListArgs;
+use bgen_reader::parser::FilterArgs;
 use serial_test::serial;
 use std::io::Cursor;
 
@@ -34,7 +34,7 @@ fn compare_original_and_rewrite() {
 #[serial]
 fn filtering_on_bgen_write() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = ListArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     bgen_stream.to_bgen(OUT_FILE).unwrap();
     let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();

@@ -1,7 +1,7 @@
 use crate::bgen::utils::{
     compress_data, write_u16, write_u16_sized_string, write_u32, write_u32_sized_string, write_u8,
 };
-use crate::parser::Range;
+use crate::parser::{Range, VariantOutput};
 use color_eyre::Result;
 use core::panic;
 use derivative::Derivative;
@@ -41,7 +41,7 @@ pub struct DataBlock {
 static SEPARATOR: &[u8] = "\t".as_bytes();
 
 impl VariantData {
-    pub fn bgenix_print(&self, mut writer: impl Write) -> Result<()> {
+    fn bgenix_print(&self, mut writer: impl Write) -> Result<()> {
         let mut buffer = [0u8; 20];
         Self::write_with_sep(&mut writer, self.variants_id.as_bytes())?;
         Self::write_with_sep(&mut writer, self.rsid.as_bytes())?;
@@ -51,6 +51,19 @@ impl VariantData {
         Self::write_with_sep(&mut writer, b_number_alleles)?;
         Self::write_with_sep(&mut writer, self.alleles[0].as_bytes())?;
         Self::write_with_sep(&mut writer, self.alleles[1].as_bytes())?;
+        writer.write_all(b"\n")?;
+        Ok(())
+    }
+
+    pub fn print(&self, writer: impl Write, variant_output: VariantOutput) -> Result<()> {
+        match variant_output {
+            VariantOutput::Bgenix => self.bgenix_print(writer),
+            VariantOutput::Rsid => self.rsid_print(writer),
+        }
+    }
+
+    fn rsid_print(&self, mut writer: impl Write) -> Result<()> {
+        writer.write_all(self.rsid.as_bytes())?;
         writer.write_all(b"\n")?;
         Ok(())
     }

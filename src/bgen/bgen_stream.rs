@@ -1,7 +1,7 @@
 use crate::bgen::header::{Header, HeaderFlags};
 use crate::bgen::utils::{decompress_block, read_lines, write_u16, write_u32};
 use crate::bgen::variant_data::{DataBlock, VariantData};
-use crate::parser::{ListArgs, Range};
+use crate::parser::{FilterArgs, Range};
 use bitvec::prelude::*;
 use color_eyre::{Report, Result};
 use itertools::Itertools;
@@ -344,7 +344,7 @@ impl<T: Read> BgenStream<T> {
         Ok(())
     }
 
-    pub fn collect_filters(&mut self, list_args: ListArgs) -> Result<()> {
+    pub fn collect_filters(&mut self, list_args: FilterArgs) -> Result<()> {
         let (vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid) =
             list_args.get_vector_incl_and_excl()?;
         self.ranges.incl_range = vec_incl_range;
@@ -427,8 +427,6 @@ where
         let mut writer = BufWriter::new(file);
         let mut other = self.create_identical_bgen()?;
         other.read_offset_and_header()?;
-        dbg!(other.header.variant_num);
-        dbg!(other.header.variant_count);
         self.read_data_block = false;
         // first pass to get the number of variants
         let mut header_final = self.header.clone();
@@ -439,7 +437,6 @@ where
         let layout_id = other.header.header_flags.layout_id;
         other.try_for_each(|variant_data| {
             let var_data = variant_data?;
-            dbg!(&var_data.rsid);
             var_data.write_self(&mut writer, layout_id)
         })
     }
