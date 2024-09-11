@@ -1,10 +1,14 @@
+use crate::bgen::utils::{
+    compress_data, write_u16, write_u16_sized_string, write_u32, write_u32_sized_string, write_u8,
+};
 use crate::parser::Range;
 use color_eyre::Result;
 use core::panic;
 use derivative::Derivative;
 use itertools::Itertools;
 use numtoa::NumToA;
-use std::io::Write;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 
 #[derive(Derivative)]
 #[derivative(Default, Debug, PartialEq, Eq, Clone)]
@@ -181,6 +185,63 @@ impl VariantData {
 
     fn in_range(&self, range: &Range) -> bool {
         range.chr == self.chr && range.start <= self.pos && self.pos <= range.end
+    }
+    pub fn write_self(self, writer: &mut BufWriter<File>, layout_id: u8) -> Result<()> {
+        if layout_id == 1 {
+            write_u32(writer, self.number_individuals.unwrap())?;
+        }
+        write_u16_sized_string(writer, self.variants_id)?;
+        write_u16_sized_string(writer, self.rsid)?;
+        write_u16_sized_string(writer, self.chr)?;
+        write_u32(writer, self.pos)?;
+        if layout_id != 1 {
+            write_u16(writer, self.number_alleles)?;
+        }
+        self.alleles
+            .into_iter()
+            .map(|allele| write_u32_sized_string(writer, allele))
+            .collect::<Result<Vec<_>>>()?;
+        Self::write_data_block(writer, self.data_block)?;
+        Ok(())
+    }
+
+    fn write_data_block(writer: &mut BufWriter<File>, data_block: DataBlock) -> Result<()> {
+        let mut data = Vec::new();
+        let mut data_writer = BufWriter::new(&mut data);
+        write_u32(&mut data_writer, data_block.number_individuals)?;
+        write_u16(&mut data_writer, data_block.number_alleles)?;
+        write_u8(&mut data_writer, data_block.minimum_ploidy)?;
+        write_u8(&mut data_writer, data_block.maximum_ploidy)?;
+        data_block
+            .ploidy_missingness
+            .into_iter()
+            .map(|p| write_u8(&mut data_writer, p))
+            .collect::<Result<Vec<_>>>()?;
+        write_u8(&mut data_writer, data_block.phased as u8)?;
+        write_u8(&mut data_writer, data_block.bytes_probability)?;
+        assert_eq!(data_block.bytes_probability % 8, 0);
+        let chunk_size = (data_block.bytes_probability / 8) as usize;
+        data_block
+            .probabilities
+            .into_iter()
+            .map(|probability| {
+                probability
+                    .to_le_bytes()
+                    .into_iter()
+                    .take(chunk_size)
+                    .map(|byte_proba| write_u8(&mut data_writer, byte_proba))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        data_writer.flush()?;
+        drop(data_writer);
+        let uncompressed_length = data.len() as u32;
+        let block = compress_data(&data)?;
+        let length_data_block = block.len() as u32 + 4;
+        write_u32(writer, length_data_block)?;
+        write_u32(writer, uncompressed_length)?;
+        writer.write_all(&block)?;
+        Ok(())
     }
 }
 

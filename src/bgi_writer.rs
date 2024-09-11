@@ -1,5 +1,5 @@
 use crate::bgen::bgen_stream::FileMetadata;
-use crate::variant_data::VariantData;
+use crate::bgen::variant_data::VariantData;
 use color_eyre::Result;
 use itertools::Itertools;
 use sqlite::Connection;

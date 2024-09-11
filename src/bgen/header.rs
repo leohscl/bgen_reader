@@ -1,10 +1,10 @@
-use crate::bgen::bgen_stream::write_u32;
+use crate::bgen::utils::write_u32;
 use color_eyre::Result;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Header {
     pub start_data_offset: u32,
     pub header_size: u32,
