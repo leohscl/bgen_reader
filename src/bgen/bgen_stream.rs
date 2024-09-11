@@ -1,9 +1,9 @@
+use crate::bgen::header::{Header, HeaderFlags};
 use crate::parser::ListArgs;
 use crate::parser::Range;
 use crate::variant_data::{DataBlock, VariantData};
 use bitvec::prelude::*;
-use color_eyre::Report;
-use color_eyre::Result;
+use color_eyre::{Report, Result};
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use itertools::Itertools;
@@ -34,28 +34,6 @@ pub struct Ranges {
 
 pub trait BgenClone<T> {
     fn create_identical_bgen(&self) -> Result<BgenStream<T>>;
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Header {
-    pub start_data_offset: u32,
-    pub header_size: u32,
-    pub variant_num: u32,
-    variant_count: u32,
-    pub sample_num: u32,
-    pub header_flags: HeaderFlags,
-}
-
-impl Header {
-    fn write_header(&self, writer: &mut BufWriter<File>) -> Result<()> {
-        write_u32(writer, self.start_data_offset)?;
-        write_u32(writer, self.header_size)?;
-        write_u32(writer, self.variant_num)?;
-        write_u32(writer, self.sample_num)?;
-        writer.write_all(b"bgen")?;
-        write_u32(writer, self.header_flags.to_u32())?;
-        Ok(())
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -692,7 +670,7 @@ where
     Ok(())
 }
 
-fn write_u32<T>(writer: &mut BufWriter<T>, num: u32) -> Result<()>
+pub fn write_u32<T>(writer: &mut BufWriter<T>, num: u32) -> Result<()>
 where
     T: std::io::Write,
 {
@@ -713,30 +691,5 @@ impl<T: Read> BufRead for BgenStream<T> {
 
     fn consume(&mut self, amt: usize) {
         self.stream.consume(amt)
-    }
-}
-
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
-pub struct HeaderFlags {
-    pub compressed_snp_blocks: bool,
-    pub layout_id: u8,
-    pub sample_id_present: bool,
-}
-
-impl HeaderFlags {
-    fn from_u32(value: u32) -> Result<HeaderFlags> {
-        let compressed_snp_blocks = (value & 1) == 1;
-        let sample_id_present = ((value >> 31) & 1) == 1;
-        let layout_id = ((value >> 2) & 3) as u8;
-        Ok(HeaderFlags {
-            compressed_snp_blocks,
-            layout_id,
-            sample_id_present,
-        })
-    }
-    fn to_u32(&self) -> u32 {
-        ((self.sample_id_present as u32) << 31)
-            + (self.compressed_snp_blocks as u32)
-            + ((self.layout_id as u32) << 2)
     }
 }

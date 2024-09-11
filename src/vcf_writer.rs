@@ -1,9 +1,8 @@
+use crate::bgen::bgen_stream::BgenStream;
 use color_eyre::Result;
 use std::fs::File;
-use std::io::BufWriter;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 
-use crate::bgen::BgenStream;
 const HEADER_LINES: &[&str] = &[
     "##fileformat=VCFv4.2\n",
     "##FORMAT=<ID=GT,Type=String,Number=1,Description=\"Threshholded genotype call\">\n",

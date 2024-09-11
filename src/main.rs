@@ -1,4 +1,4 @@
-use bgen_reader::bgen::{bgen_merge, BgenStream, MetadataBgi};
+use bgen_reader::bgen::bgen_stream::{bgen_merge, BgenStream, MetadataBgi};
 use bgen_reader::bgi_writer::TableCreator;
 use bgen_reader::parser::{Cli, Command};
 use bgen_reader::vcf_writer;
