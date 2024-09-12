@@ -40,6 +40,17 @@ pub struct DataBlock {
 }
 static SEPARATOR: &[u8] = "\t".as_bytes();
 
+pub fn write_header(mut writer: impl Write, variant_output: &VariantOutput) -> Result<()> {
+    match variant_output {
+        VariantOutput::Bgenix => {
+            let line_header = b"alternate_ids\trsid\tchromosome\tposition\tnumber_of_alleles\tfirst_allele\talternative_alleles\n";
+            writer.write_all(line_header)?;
+        }
+        VariantOutput::Rsid => (),
+    }
+    Ok(())
+}
+
 impl VariantData {
     fn bgenix_print(&self, mut writer: impl Write) -> Result<()> {
         let mut buffer = [0u8; 20];

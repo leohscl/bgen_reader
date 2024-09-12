@@ -26,7 +26,7 @@ pub trait BgenClone<T> {
     fn create_identical_bgen(&self) -> Result<BgenStream<T>>;
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Ranges {
     pub incl_range: Vec<Range>,
     pub incl_rsids: Vec<String>,
@@ -109,8 +109,8 @@ impl<T: Read> BgenStream<T> {
         log::info!("Number of variants: {}", variant_num);
         assert!(variant_num > 0);
         let sample_num = self.read_u32()?;
-        log::info!("Number of samples: {}", sample_num);
         assert!(sample_num > 0);
+        log::info!("Number of samples: {}", sample_num);
         read_into_buffer!(magic_num, self, 4);
         if !(magic_num == [0u8; 4] || &magic_num == b"bgen") {
             return Err(Report::msg(
@@ -354,10 +354,15 @@ impl<T: Read> BgenStream<T> {
         Ok(())
     }
 }
-pub fn bgen_merge(merge_filename: String, output_name: String) -> Result<()> {
+
+pub fn bgen_merge(merge_filename: String, output_name: String, cli_filename: String) -> Result<()> {
     let file = File::create(output_name)?;
     let mut writer = BufWriter::new(file);
-    let lines = read_lines(merge_filename.clone())?;
+    let mut lines = read_lines(merge_filename.clone())?;
+    if !lines.contains(&cli_filename) {
+        lines.push(cli_filename)
+    }
+    lines.retain(|s| !s.is_empty());
     let mut num_variants = 0;
     // first pass to read
     println!("First pass for merging, computing the number of variants and checking samples");
@@ -389,9 +394,15 @@ pub fn bgen_merge(merge_filename: String, output_name: String) -> Result<()> {
                 bgen_stream.len_samples_block,
             )?;
         }
-        let layout_id = bgen_stream.header.header_flags.layout_id;
-        bgen_stream
-            .try_for_each(|variant_data| variant_data?.write_self(&mut writer, layout_id))?;
+        let mut buf = [0; 8192];
+        loop {
+            let len_read = bgen_stream.read(&mut buf)?;
+            if len_read == 0 {
+                break;
+            } else {
+                writer.write_all(&buf[0..len_read])?;
+            }
+        }
     }
     Ok(())
 }
@@ -422,7 +433,7 @@ impl<T: Read> BgenStream<T>
 where
     BgenStream<T>: BgenClone<T>,
 {
-    pub fn to_bgen(mut self, output_path: &str) -> Result<()> {
+    pub fn to_bgen(mut self, output_path: &str, no_samples: bool) -> Result<()> {
         let file = File::create(output_path)?;
         let mut writer = BufWriter::new(file);
         let mut other = self.create_identical_bgen()?;
@@ -432,8 +443,19 @@ where
         let mut header_final = self.header.clone();
         let num_variants = self.count();
         header_final.variant_num = num_variants as u32;
+        if no_samples {
+            header_final.header_flags.sample_id_present = false;
+            header_final.start_data_offset -= 8u32
+                + other
+                    .samples
+                    .iter()
+                    .map(|s| s.len() as u32 + 2u32)
+                    .sum::<u32>();
+        }
         header_final.write_header(&mut writer)?;
-        Self::write_samples(&other.samples, &mut writer, other.len_samples_block)?;
+        if header_final.header_flags.sample_id_present {
+            Self::write_samples(&other.samples, &mut writer, other.len_samples_block)?;
+        }
         let layout_id = other.header.header_flags.layout_id;
         other.try_for_each(|variant_data| {
             let var_data = variant_data?;

@@ -73,10 +73,11 @@ pub struct FilterArgs {
     #[command(flatten)]
     pub excl_rsid: ExclRsid,
 }
+// TODO(lhenches): this should be Hashmap for rsids
 type AllFilters = (Vec<Range>, Vec<String>, Vec<Range>, Vec<String>);
 
 impl FilterArgs {
-    pub fn with_incl_file(mut self, incl_file_str: String) -> Self {
+    pub fn with_range_incl_file(mut self, incl_file_str: String) -> Self {
         self.incl_range = InclRange {
             incl_range: None,
             incl_range_file: Some(incl_file_str),
@@ -84,7 +85,7 @@ impl FilterArgs {
         self
     }
 
-    pub fn with_excl_file(mut self, excl_file_str: String) -> Self {
+    pub fn with_range_excl_file(mut self, excl_file_str: String) -> Self {
         self.excl_range = ExclRange {
             excl_range: None,
             excl_range_file: Some(excl_file_str),
@@ -92,7 +93,7 @@ impl FilterArgs {
         self
     }
 
-    pub fn with_incl_str(mut self, incl_str: String) -> Self {
+    pub fn with_range_incl_str(mut self, incl_str: String) -> Self {
         self.incl_range = InclRange {
             incl_range: Some(incl_str),
             incl_range_file: None,
@@ -100,10 +101,26 @@ impl FilterArgs {
         self
     }
 
-    pub fn with_excl_str(mut self, excl_str: String) -> Self {
+    pub fn with_range_excl_str(mut self, excl_str: String) -> Self {
         self.excl_range = ExclRange {
             excl_range: Some(excl_str),
             excl_range_file: None,
+        };
+        self
+    }
+
+    pub fn with_rsid_incl_str(mut self, incl_str: String) -> Self {
+        self.incl_rsid = InclRsid {
+            incl_rsid: Some(incl_str),
+            incl_rsid_file: None,
+        };
+        self
+    }
+
+    pub fn with_rsid_incl_file(mut self, incl_file_str: String) -> Self {
+        self.incl_rsid = InclRsid {
+            incl_rsid: None,
+            incl_rsid_file: Some(incl_file_str),
         };
         self
     }
@@ -155,20 +172,34 @@ impl FilterArgs {
         } else {
             Vec::new()
         };
-        let opt_incl_rsid = match &self.incl_rsid {
+        let opt_incl_rsid: Vec<String> = match &self.incl_rsid {
             InclRsid {
                 incl_rsid,
                 incl_rsid_file: None,
-            } => incl_rsid.clone(),
-            _ => None,
+            } => incl_rsid.iter().cloned().collect(),
+            InclRsid {
+                incl_rsid: None,
+                incl_rsid_file: Some(incl_file),
+            } => std::fs::read_to_string(incl_file)?
+                .split('\n')
+                .map(|s| s.to_string())
+                .collect(),
+            _ => panic!("Rsid file and range at command line specified"),
         };
         let vec_incl_rsid: Vec<_> = opt_incl_rsid.into_iter().collect();
-        let opt_excl_rsid = match &self.excl_rsid {
+        let opt_excl_rsid: Vec<String> = match &self.excl_rsid {
             ExclRsid {
                 excl_rsid,
                 excl_rsid_file: None,
-            } => excl_rsid.clone(),
-            _ => None,
+            } => excl_rsid.iter().cloned().collect(),
+            ExclRsid {
+                excl_rsid: None,
+                excl_rsid_file: Some(excl_file),
+            } => std::fs::read_to_string(excl_file)?
+                .split('\n')
+                .map(|s| s.to_string())
+                .collect(),
+            _ => panic!("Rsid file and range at command line specified"),
         };
         let vec_excl_rsid: Vec<_> = opt_excl_rsid.into_iter().collect();
         Ok((vec_incl_range, vec_incl_rsid, vec_excl_range, vec_excl_rsid))

@@ -8,32 +8,37 @@ use std::io::Cursor;
 use std::io::LineWriter;
 use std::io::Write;
 
-const OUT_FILE_1_VAR: &str = "with_1_var.bgen";
-const OUT_FILE_99_VAR: &str = "with_99_var.bgen";
+const OUT_FILE_P1: &str = "with_1_var.bgen";
+const OUT_FILE_P2: &str = "with_99_var.bgen";
 
 #[test]
 #[serial]
 fn filtering_then_merging() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_range_incl_str("1:0-952567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
-    bgen_stream.to_bgen(OUT_FILE_1_VAR).unwrap();
+    bgen_stream.to_bgen(OUT_FILE_P1, false).unwrap();
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = FilterArgs::default().with_excl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_range_excl_str("1:0-952567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
-    bgen_stream.to_bgen(OUT_FILE_99_VAR).unwrap();
+    bgen_stream.to_bgen(OUT_FILE_P2, false).unwrap();
     let merge_name = "tmp.merge";
     let file_merge = File::create(merge_name).unwrap();
     let mut writer = LineWriter::new(file_merge);
-    writer.write_all(OUT_FILE_1_VAR.as_bytes()).unwrap();
+    writer.write_all(OUT_FILE_P1.as_bytes()).unwrap();
     writer.write_all(b"\n").unwrap();
-    writer.write_all(OUT_FILE_99_VAR.as_bytes()).unwrap();
+    writer.write_all(OUT_FILE_P2.as_bytes()).unwrap();
     writer.write_all(b"\n").unwrap();
     let merge_output = "reconstructed.bgen";
-    bgen_merge(merge_name.to_string(), merge_output.to_string()).unwrap();
+    bgen_merge(
+        merge_name.to_string(),
+        merge_output.to_string(),
+        OUT_FILE_P1.to_string(),
+    )
+    .unwrap();
     assert_bgen_equality("data_test/samp_100_var_100.bgen", merge_output);
-    std::fs::remove_file(OUT_FILE_99_VAR).unwrap();
-    std::fs::remove_file(OUT_FILE_1_VAR).unwrap();
+    std::fs::remove_file(OUT_FILE_P2).unwrap();
+    std::fs::remove_file(OUT_FILE_P1).unwrap();
     std::fs::remove_file(merge_output).unwrap();
     std::fs::remove_file(merge_name).unwrap();
 }
@@ -56,6 +61,7 @@ fn assert_bgen_equality(file_1: &str, file_2: &str) {
     //dbg!("reading data block 1");
     let data_blocks_1 = bgen_stream_1.collect::<Result<Vec<_>, _>>().unwrap();
     let data_blocks_2 = bgen_stream_2.collect::<Result<Vec<_>, _>>().unwrap();
+    dbg!(&data_blocks_2);
     assert_eq!(
         data_blocks_1.len(),
         data_blocks_2.len(),

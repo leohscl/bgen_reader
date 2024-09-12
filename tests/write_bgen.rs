@@ -9,7 +9,7 @@ const OUT_FILE: &str = "test.bgen";
 #[test]
 #[serial]
 fn compare_original_and_rewrite() {
-    create_bgen_and_read().to_bgen(OUT_FILE).unwrap();
+    create_bgen_and_read().to_bgen(OUT_FILE, false).unwrap();
     let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
     bgen_stream_test.read_offset_and_header().unwrap();
     let bgen_bytes = include_bytes!("../data_test/samp_100_var_100.bgen");
@@ -34,9 +34,25 @@ fn compare_original_and_rewrite() {
 #[serial]
 fn filtering_on_bgen_write() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_range_incl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
-    bgen_stream.to_bgen(OUT_FILE).unwrap();
+    bgen_stream.to_bgen(OUT_FILE, false).unwrap();
+    let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
+    bgen_stream_test.read_offset_and_header().unwrap();
+    assert_eq!(1, bgen_stream_test.header.variant_num);
+    let variant_data: Vec<_> = bgen_stream_test.map(|r| r.unwrap()).collect();
+    dbg!(&variant_data);
+    assert_eq!(1, variant_data.len());
+    std::fs::remove_file(OUT_FILE).unwrap();
+}
+
+#[test]
+#[serial]
+fn filtering_rsid_on_bgen_write() {
+    let mut bgen_stream = create_bgen_and_read();
+    let list_args = FilterArgs::default().with_rsid_incl_str("1_752566_G_A".to_string());
+    bgen_stream.collect_filters(list_args).unwrap();
+    bgen_stream.to_bgen(OUT_FILE, false).unwrap();
     let mut bgen_stream_test = BgenStream::from_path(OUT_FILE, false, true).unwrap();
     bgen_stream_test.read_offset_and_header().unwrap();
     assert_eq!(1, bgen_stream_test.header.variant_num);

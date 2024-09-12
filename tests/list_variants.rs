@@ -75,18 +75,34 @@ fn test_no_filter() {
 #[test]
 fn test_filter() {
     let mut bgen_stream = create_bgen_and_read();
-    let list_args = FilterArgs::default().with_incl_str("1:0-752567".to_string());
+    let list_args = FilterArgs::default().with_range_incl_str("1:0-752567".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(1, variant_data.len());
 }
 
 #[test]
+fn test_filter_rsid() {
+    let mut bgen_stream = create_bgen_and_read();
+    let list_args = FilterArgs::default().with_rsid_incl_str("1_752566_G_A".to_string());
+    bgen_stream.collect_filters(list_args).unwrap();
+    let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
+    assert_eq!(1, variant_data.len());
+    assert_eq!(
+        ["1_752566_G_A",].to_vec(),
+        variant_data
+            .into_iter()
+            .map(|v| v.rsid)
+            .collect::<Vec<String>>()
+    );
+}
+
+#[test]
 fn test_double_filter() {
     let mut bgen_stream = create_bgen_and_read();
     let list_args = FilterArgs::default()
-        .with_incl_str("1:0-900000".to_string())
-        .with_excl_str("1:800000-850000".to_string());
+        .with_range_incl_str("1:0-900000".to_string())
+        .with_range_excl_str("1:800000-850000".to_string());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(
@@ -115,11 +131,48 @@ fn test_filter_file() {
     let filepath = dir.path().join(filename);
     let mut file = std::fs::File::create(filepath.clone()).unwrap();
     writeln!(file, "1:0-752567").unwrap();
-    let list_args =
-        FilterArgs::default().with_incl_file(filepath.into_os_string().into_string().unwrap());
+    let list_args = FilterArgs::default()
+        .with_range_incl_file(filepath.into_os_string().into_string().unwrap());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(1, variant_data.len());
+}
+
+#[test]
+fn test_filter_rsid_file() {
+    let mut bgen_stream = create_bgen_and_read();
+    let dir = tempdir().unwrap();
+    let filename = "tmp_range";
+    let filepath = dir.path().join(filename);
+    let mut file = std::fs::File::create(filepath.clone()).unwrap();
+    writeln!(file, "1_752566_G_A").unwrap();
+    writeln!(file, "1_752721_A_G").unwrap();
+    writeln!(file, "1_873558_G_T").unwrap();
+    writeln!(file, "1_881627_G_A").unwrap();
+    writeln!(file, "1_888659_T_C").unwrap();
+    writeln!(file, "1_891945_A_G").unwrap();
+    writeln!(file, "1_894573_G_A").unwrap();
+    let list_args =
+        FilterArgs::default().with_rsid_incl_file(filepath.into_os_string().into_string().unwrap());
+    bgen_stream.collect_filters(list_args).unwrap();
+    let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
+    assert_eq!(7, variant_data.len());
+    assert_eq!(
+        [
+            "1_752566_G_A",
+            "1_752721_A_G",
+            "1_873558_G_T",
+            "1_881627_G_A",
+            "1_888659_T_C",
+            "1_891945_A_G",
+            "1_894573_G_A"
+        ]
+        .to_vec(),
+        variant_data
+            .into_iter()
+            .map(|v| v.rsid)
+            .collect::<Vec<String>>()
+    );
 }
 
 #[test]
@@ -135,8 +188,8 @@ fn test_double_filter_file() {
     let mut file_excl = std::fs::File::create(filepath_excl.clone()).unwrap();
     writeln!(file_excl, "1:800000-850000").unwrap();
     let list_args = FilterArgs::default()
-        .with_incl_file(filepath_incl.into_os_string().into_string().unwrap())
-        .with_excl_file(filepath_excl.into_os_string().into_string().unwrap());
+        .with_range_incl_file(filepath_incl.into_os_string().into_string().unwrap())
+        .with_range_excl_file(filepath_excl.into_os_string().into_string().unwrap());
     bgen_stream.collect_filters(list_args).unwrap();
     let variant_data: Vec<_> = bgen_stream.map(|r| r.unwrap()).collect();
     assert_eq!(
