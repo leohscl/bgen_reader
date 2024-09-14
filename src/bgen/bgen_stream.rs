@@ -120,10 +120,13 @@ impl<T: Read> BgenStream<T> {
         self.skip_bytes(header_size as usize - 20)?;
         let header_flags = HeaderFlags::from_u32(self.read_u32()?)?;
         log::info!("Layout id: {}", header_flags.layout_id);
-
+        log::info!("sample_id_present: {}", header_flags.sample_id_present);
         if header_flags.sample_id_present {
             self.read_samples()?;
         }
+
+        log::info!("byte_count: {}", self.byte_count);
+        log::info!("start_data_offset: {}", start_data_offset);
         assert!(start_data_offset as usize == self.byte_count - 4);
         self.header = Header {
             start_data_offset,
