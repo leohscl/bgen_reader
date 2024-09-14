@@ -52,13 +52,13 @@ pub struct FilterArgsList {
     #[command(flatten)]
     pub filter_args: FilterArgs,
     #[command(subcommand)]
-    pub variant_output: VariantOutput,
+    pub variant_output: Option<VariantOutput>,
 }
 
 #[derive(Subcommand, Default, Clone)]
 pub enum VariantOutput {
-    #[default]
     Bgenix,
+    #[default]
     Rsid,
 }
 

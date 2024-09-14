@@ -1,7 +1,7 @@
 use bgen_reader::bgen::bgen_stream::{bgen_merge, BgenStream, MetadataBgi};
 use bgen_reader::bgen::bgi_writer::TableCreator;
 use bgen_reader::bgen::variant_data::write_header;
-use bgen_reader::parser::{Cli, Command};
+use bgen_reader::parser::{Cli, Command, VariantOutput};
 use bgen_reader::vcf_writer;
 use clap::Parser;
 use color_eyre::Report;
@@ -40,12 +40,15 @@ fn main() -> Result<()> {
             bgen_stream.read_offset_and_header()?;
             bgen_stream.collect_filters(filter_args_list.filter_args)?;
             let mut writer = BufWriter::new(std::io::stdout());
-            write_header(&mut writer, &filter_args_list.variant_output)?;
+            let var_output = match filter_args_list.variant_output {
+                Some(var_out) => var_out,
+                None => VariantOutput::default(),
+            };
+            write_header(&mut writer, &var_output)?;
             //let line_header = b"alternate_ids\trsid\tchromosome\tposition\tnumber_of_alleles\tfirst_allele\talternative_alleles\n";
             //writer.write_all(line_header)?;
-            bgen_stream.try_for_each(|variant_data| {
-                variant_data?.print(&mut writer, filter_args_list.variant_output.clone())
-            })?
+            bgen_stream
+                .try_for_each(|variant_data| variant_data?.print(&mut writer, &var_output))?
         }
         Command::Vcf(list_args_named) => {
             let mut bgen_stream = BgenStream::from_path(&cli.filename, cli.use_sample_file, true)?;

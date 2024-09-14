@@ -66,7 +66,7 @@ impl VariantData {
         Ok(())
     }
 
-    pub fn print(&self, writer: impl Write, variant_output: VariantOutput) -> Result<()> {
+    pub fn print(&self, writer: impl Write, variant_output: &VariantOutput) -> Result<()> {
         match variant_output {
             VariantOutput::Bgenix => self.bgenix_print(writer),
             VariantOutput::Rsid => self.rsid_print(writer),
@@ -269,7 +269,13 @@ impl VariantData {
     }
 }
 
-fn f64_round(f: f64) -> u8 {
+/// # Examples
+/// ```
+/// # use bgen_reader::bgen::variant_data::f64_round;
+/// let f = 1.6f64;
+/// assert_eq!(f64_round(f), 2);
+/// ```
+pub fn f64_round(f: f64) -> u8 {
     match f {
         x if (0f64..=0.5f64).contains(&x) => 0,
         x if (0.5f64..=1.5f64).contains(&x) => 1,
