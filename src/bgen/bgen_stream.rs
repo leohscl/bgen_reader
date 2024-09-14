@@ -492,8 +492,8 @@ impl BgenStream<File> {
 
         let metadata_std = std::fs::metadata(path)?;
         let file_size = metadata_std.len();
-        let index_creation_time = metadata_std.created()?;
-        let last_write_time = metadata_std.modified()?;
+        let index_creation_time = metadata_std.created().unwrap_or(SystemTime::UNIX_EPOCH);
+        let last_write_time = metadata_std.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         let mut first_1000_bytes = vec![0; 1000];
         let mut file = File::open(path_str)?;
         file.read_exact(first_1000_bytes.as_mut_slice())?;
