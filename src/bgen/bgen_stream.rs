@@ -127,7 +127,14 @@ impl<T: Read> BgenStream<T> {
 
         log::info!("byte_count: {}", self.byte_count);
         log::info!("start_data_offset: {}", start_data_offset);
-        assert!(start_data_offset as usize == self.byte_count - 4);
+        if start_data_offset as usize != (self.byte_count - 4) {
+            log::warn!(
+                "Header has extra bytes, starting at {} and ending at {}. File might be corrupted",
+                self.byte_count - 4,
+                start_data_offset
+            );
+            self.skip_bytes(start_data_offset as usize - (self.byte_count - 4))?;
+        }
         self.header = Header {
             start_data_offset,
             header_size,
