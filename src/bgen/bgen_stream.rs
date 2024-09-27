@@ -106,10 +106,13 @@ impl<T: Read> BgenStream<T> {
             ));
         }
         let variant_num = self.read_u32()?;
-        log::info!("Number of variants: {}", variant_num);
-        assert!(variant_num > 0);
+        if variant_num == 0 {
+            log::warn!("No variants in dataset");
+        }
         let sample_num = self.read_u32()?;
-        assert!(sample_num > 0);
+        if sample_num == 0 {
+            log::warn!("No samples in dataset");
+        }
         log::info!("Number of samples: {}", sample_num);
         read_into_buffer!(magic_num, self, 4);
         if !(magic_num == [0u8; 4] || &magic_num == b"bgen") {
@@ -378,7 +381,7 @@ pub fn bgen_merge(merge_filename: String, output_name: String, cli_filename: Str
     println!("First pass for merging, computing the number of variants and checking samples");
     let mut samples = Vec::new();
     for (i, line) in lines.iter().enumerate() {
-        println!("Reading file {}, at line {}", line, i);
+        println!("Reading file {}, at line {} in merge file", line, i);
         let mut bgen_stream = BgenStream::from_path(line, false, false)?;
         bgen_stream.read_offset_and_header()?;
         num_variants += bgen_stream.header.variant_num;
