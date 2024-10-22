@@ -17,10 +17,10 @@ echo "$second_half" >>"$tmp_merge"
 out="../data_test/reconstructed.bgen"
 
 # bgen_reader
-# hyperfine "../target/release/bgen_reader --filename $first_half merge $tmp_merge $out"
+hyperfine "../target/release/bgen_reader --filename $first_half merge $tmp_merge $out"
 
 # qctool
-samples="../data_test/100.sample"
-# hyperfine "./qctool -g $first_half -s $samples -merge-in $second_half $samples -og $out"
+samples="../data_test/100.sample_qctool"
+hyperfine "./qctool -g $first_half -s $samples -merge-in $second_half $samples -og $out"
 
-rm $list $list1 $list2 $first_half $second_half $tmp_merge
+# rm $list $list1 $list2 $first_half $second_half $tmp_merge

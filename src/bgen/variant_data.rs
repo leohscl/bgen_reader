@@ -74,12 +74,13 @@ impl VariantData {
     }
 
     fn rsid_print(&self, mut writer: impl Write) -> Result<()> {
-        writer.write_all(self.rsid.as_bytes())?;
+        Self::write_with_sep(&mut writer, self.rsid.as_bytes())?;
+        Self::write_with_sep(&mut writer, self.alleles.join("_").as_bytes())?;
         writer.write_all(b"\n")?;
         Ok(())
     }
 
-    pub fn write_with_sep(mut writer: impl Write, b: &[u8]) -> Result<()> {
+    pub fn write_with_sep(writer: &mut impl Write, b: &[u8]) -> Result<()> {
         if b == b"" {
             writer.write_all(b".")?;
         } else {
@@ -210,6 +211,7 @@ impl VariantData {
     fn in_range(&self, range: &Range) -> bool {
         range.chr == self.chr && range.start <= self.pos && self.pos <= range.end
     }
+
     pub fn write_self(self, writer: &mut BufWriter<File>, layout_id: u8) -> Result<()> {
         if layout_id == 1 {
             write_u32(writer, self.number_individuals.unwrap())?;

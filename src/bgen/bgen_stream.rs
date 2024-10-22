@@ -280,20 +280,6 @@ impl<T: Read> BgenStream<T> {
         Ok(data_block)
     }
 
-    fn write_samples(
-        samples: &[String],
-        writer: &mut BufWriter<File>,
-        len_samples_block: u32,
-    ) -> Result<()> {
-        write_u32(writer, len_samples_block)?;
-        write_u32(writer, samples.len() as u32)?;
-        for sample in samples {
-            let bytes = sample.clone().into_bytes();
-            write_u16(writer, bytes.len() as u16)?;
-            writer.write_all(&bytes)?;
-        }
-        Ok(())
-    }
 
     fn convert_u8_chunk(to_convert: &[u8]) -> u32 {
         to_convert
@@ -401,7 +387,7 @@ pub fn bgen_merge(merge_filename: String, output_name: String, cli_filename: Str
             let mut header = bgen_stream.header.clone();
             header.variant_num = num_variants;
             header.write_header(&mut writer)?;
-            BgenStream::<File>::write_samples(
+            write_samples(
                 &bgen_stream.samples,
                 &mut writer,
                 bgen_stream.len_samples_block,
@@ -442,6 +428,21 @@ impl<T: Read> Iterator for BgenStream<T> {
     }
 }
 
+pub fn write_samples(
+    samples: &[String],
+    writer: &mut BufWriter<File>,
+    len_samples_block: u32,
+) -> Result<()> {
+    write_u32(writer, len_samples_block)?;
+    write_u32(writer, samples.len() as u32)?;
+    for sample in samples {
+        let bytes = sample.clone().into_bytes();
+        write_u16(writer, bytes.len() as u16)?;
+        writer.write_all(&bytes)?;
+    }
+    Ok(())
+}
+
 impl<T: Read> BgenStream<T>
 where
     BgenStream<T>: BgenClone<T>,
@@ -467,7 +468,7 @@ where
         }
         header_final.write_header(&mut writer)?;
         if header_final.header_flags.sample_id_present {
-            Self::write_samples(&other.samples, &mut writer, other.len_samples_block)?;
+           write_samples(&other.samples, &mut writer, other.len_samples_block)?;
         }
         let layout_id = other.header.header_flags.layout_id;
         other.try_for_each(|variant_data| {
