@@ -241,8 +241,7 @@ impl VariantData {
         data_block
             .ploidy_missingness
             .into_iter()
-            .map(|p| write_u8(&mut data_writer, p))
-            .collect::<Result<Vec<_>>>()?;
+            .try_for_each(|p| write_u8(&mut data_writer, p))?;
         write_u8(&mut data_writer, data_block.phased as u8)?;
         write_u8(&mut data_writer, data_block.bytes_probability)?;
         assert_eq!(data_block.bytes_probability % 8, 0);
@@ -250,15 +249,13 @@ impl VariantData {
         data_block
             .probabilities
             .into_iter()
-            .map(|probability| {
+            .try_for_each(|probability| {
                 probability
                     .to_le_bytes()
                     .into_iter()
                     .take(chunk_size)
-                    .map(|byte_proba| write_u8(&mut data_writer, byte_proba))
-                    .collect::<Result<Vec<_>>>()
-            })
-            .collect::<Result<Vec<_>>>()?;
+                    .try_for_each(|byte_proba| write_u8(&mut data_writer, byte_proba))
+            })?;
         data_writer.flush()?;
         drop(data_writer);
         let uncompressed_length = data.len() as u32;
